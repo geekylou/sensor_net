@@ -17,5 +17,5 @@ while True:
     sensor.close()
     line = line[line.find('=')+1:]
     print(line)
-    sock_live.send_multipart([sys.argv[1],'*',1,line])
+    sock_live.send_multipart([sys.argv[1],'*',str(1),line])
     time.sleep(1)
