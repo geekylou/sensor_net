@@ -28,6 +28,9 @@ class ZMQPubSub(object):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect('tcp://house-nas:10900')
+        self.send_socket = self.context.socket(zmq.PUB)
+        self.send_socket.connect('tcp://house-nas:10901')
+        
         print self.socket
         self.stream = ZMQStream(self.socket)
         self.stream.on_recv(self.callback)
@@ -71,10 +74,16 @@ class RelayWebSocket(tornado.websocket.WebSocketHandler):
         print "connect!"
         self.pubsub.connect()
         self.pubsub.subscribe("")
+        
+        self.context = zmq.Context()
+        self.send_socket = self.context.socket(zmq.PUB)
+        self.send_socket.connect('tcp://house-nas:10901')
+
         print 'ws opened'
   
     def on_message(self, message):
         print("Message received:",message)
+        self.send_socket.send_multipart([str(i) for i in json.loads(message)])
         #self.write_message(u"You said: " + message)
 
     def on_close(self):
