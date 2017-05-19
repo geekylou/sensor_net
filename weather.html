@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Weather readings</h1>
+<h2>
+
+Temperature(Server Cabinet):<div id="temp_in"></div><br>
+Temperature(Kitchen):<div id="temp"></div><br>
+Temperature(Attic):<div id="temp_ext_b"></div><br>
+Temperature(Remote):<div id="temp_remote_a"></div><br>
+Temperature(Outside):<div id="temp_outside"></div><br>
+Pressure:<div id="pressure"></div><br>
+
+Shed outside lights <a href="/lights/status" onclick="return lightLink(event)">Status</a>
+<a href="/lights/on" id="light_on" onclick="return lightLink(event)">On</a>
+<a href="/lights/off" id="light_off" onclick="return lightLink(event)">Off</a><br>
+Shed front(bins) lights 
+<a href="/lights/on?light=1" id="light_on_1" onclick="return lightLink(event)">On</a>
+<a href="/lights/off?light=1" id="light_off_1" onclick="return lightLink(event)">Off</a>
+
+</h2>
+<script>
+function lightLink(evt)
+{
+    var url = evt.currentTarget.href;
+    lightFetch(url);
+//    lightWSSend(evt.currentTarget.id);
+    return false;
+}
+
+function lightWSSend(url)
+{
+    socket.send(JSON.stringify(['web-client','*',url]));
+}
+
+function lightFetch(url)
+{ 
+    fetch(url, {
+	method: 'get',
+    credentials: 'include'
+ }).then(function(responseObj) 
+{
+  if (responseObj.status !== 200) 
+  {
+    console.log('status: ', responseObj.status);
+    responseObj.text().then(function(text)
+    {
+      console.log('html: ', text);
+    });
+  }
+  else responseObj.json().then(function(text) 
+  {
+    console.log('html: ', text);
+    set_labels(0,text[0]);
+    set_labels(1,text[1]);
+  });  
+},function(responseObj)
+{
+// Error handling
+});
+}
+function set_labels(id,value)
+{
+    if (id == 0 && value == "1")
+    {
+      document.getElementById("light_on").style['background-color']="red";
+      document.getElementById("light_off").style['background-color']="";
+    }
+    else if (id == 0 && value == 0)
+    {
+      document.getElementById("light_off").style['background-color']="red";
+      document.getElementById("light_on").style['background-color']="";
+    }
+
+    if (id == 1 && value == 1)
+    {
+      document.getElementById("light_on_1").style['background-color']="red";
+      document.getElementById("light_off_1").style['background-color']="";
+    }
+    else if (id == 1 && value == 0)
+    {
+      document.getElementById("light_off_1").style['background-color']="red";
+      document.getElementById("light_on_1").style['background-color']="";
+    }
+}
+
+function handle_event(event) 
+{
+        arg = JSON.parse(event.data);
+	//console.log(arg);
+	if (arg[0] == "1")
+	{
+        switch(arg[2])
+        {
+            case "1":
+                document.getElementById("temp_in").innerHTML = (arg[3]/100) + "&deg;C";
+                break;
+            case "2":
+                document.getElementById("temp").innerHTML = (arg[3]/100) + "&deg;C";
+                break;
+            case "5":
+                document.getElementById("temp_ext_b").innerHTML = (arg[3]/100) + "&deg;C";
+                break;
+            case "3":
+                document.getElementById("pressure").innerHTML = (arg[3]/100);
+                break;
+        }
+	}
+	if (arg[0] == "3")
+	{
+        switch(arg[2])
+        {
+            case "2":
+                document.getElementById("temp_remote_a").innerHTML = (arg[3]/100) + "&deg;C";
+                break;
+        }
+	}
+	if (arg[0] == "28-031600af4bff")
+	{
+	  document.getElementById("temp_outside").innerHTML = parseFloat(arg[3])/1000 + "&deg;C";
+	}
+	if (arg[0] == "shed-led")
+	{
+	  set_labels(arg[2],arg[3]);
+	}
+        //document.getElementById("result").innerHTML += event.data + "<br>";
+};
+
+lightFetch("/lights/status");
+
+if(typeof(EventSource) !== "undefined") {
+    var source = new EventSource("/weather_es/event_src");
+    source.onmessage = handle_event;
+} else {
+    //document.getElementById("result").innerHTML = "Sorry, your browser does not support server-sent events...";
+}
+
+//var socket = new WebSocket('ws://' + location.host + '/weather_ws/event');
+//socket.onmessage = handle_event;
+</script>
+
+</body>
+</html>
