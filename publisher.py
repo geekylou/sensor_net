@@ -17,5 +17,8 @@ while True:
     sensor.close()
     line = line[line.find('=')+1:]
     print(line)
+    # Send multipart only allows send byte arrays, so we convert everything to strings before sending
+    # [TODO] add .encode('UTF-8') when we switch to python3.
     sock_live.send_multipart(["Temp/"+sys.argv[1],'*',str(1),line])
     time.sleep(1)
+

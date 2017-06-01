@@ -101,7 +101,7 @@ application = tornado.web.Application([
     (r"/weather_ws/test", MainHandler),
     (r"/weather_ws/event", RelayWebSocket),
     (r"/weather_ws/event_src", RelayEventSource),
-], cookie_secret="hkhkhugruekrhwkhe")
+], cookie_secret="<secret-key>") # Cookie secret is not used here.  This should also be loaded in from a config file if needed.
 
 if __name__ == "__main__":
     try:
