@@ -6,6 +6,8 @@ import struct
 
 import usb.core
 import usb.util
+import binascii
+
 USB_TIMEOUT = 5000 # Timeout in MS
 
 class MyOled(object):
@@ -142,9 +144,26 @@ class TFT_FastBus(MyOled):
         
     def read(self):
         try:
-            str = self.rx_endpoint.read(self.rx_endpoint.wMaxPacketSize, timeout=5000)
-            
-            return struct.unpack("<BBBi", str[2:9])
+            recv_data = self.rx_endpoint.read(self.rx_endpoint.wMaxPacketSize, timeout=5000)
+            args =  struct.unpack("<BBBi", recv_data[2:9])
+            if(args[2] & 1 == 1):
+                print(recv_data[5])
+                if recv_data[5]== 1: # Onewire bus address of sensor.
+                    addr=[]
+                    for byte_data in recv_data[7:-2]:
+                            addr = [byte_data] + addr               
+                    data = ["Temp/"+binascii.hexlify(bytearray([recv_data[6]]))+'-'+binascii.hexlify(bytearray(addr))]
+                else:
+                    name = []
+                    for ch in recv_data[6:]:
+                        if ch != 0:
+                            name.append(ch)
+                        else:
+                            break
+                    data = [bytearray(name).decode('UTF-8')+"/"+str(args[0])+"-"+str(args[2] & ~0x1)]
+                return tuple(list(args[0:3]) + data)
+            else:
+                return args
             #str_out = ""
             #for ch in str[2:]:
             #    str_out = str_out + chr(ch) 
@@ -236,7 +255,7 @@ if __name__ == "__main__":
     global presure
     min = -1
     wrote_log = False
-    tempreture_log_file = open('tempreture_log', 'a', 0)
+    #tempreture_log_file = open('tempreture_log', 'a', 0)
     try:
       while True:
         if min != time.gmtime().tm_min:
@@ -246,6 +265,7 @@ if __name__ == "__main__":
             wrote_log = False
             min = time.gmtime().tm_min
         values = tft.read()
+        print(values)
         if values[2] == 1 and internal_temp == -1:
             print "Internal temp", values[3]
             internal_temp = values[3]
@@ -257,9 +277,10 @@ if __name__ == "__main__":
             pressure = values[3]
             
         if pressure >= 0 and internal_temp >= 0 and external_temp >= 0 and wrote_log == False:
-            tempreture_log_file.write(str(time.time())+','+str(pressure)+','+str(internal_temp)+','+str(external_temp)+'\n')
+            #tempreture_log_file.write(str(time.time())+','+str(pressure)+','+str(internal_temp)+','+str(external_temp)+'\n')
             wrote_log = True
             
+        tft.write_radio(struct.pack("<BBBBB", 1,3, 0x12, 1, 1))
     except KeyError:
         tempreture_log_file.close()
         #tft.fast_endpoint.write(struct.pack("<H",0x4000) + str(x))
