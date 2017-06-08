@@ -46,7 +46,7 @@ def radio_thread():
         
     
     values = tft.read()
-    sock_send.send_multipart([str(i) for i in values])
+    #sock_send.send_multipart([str(i) for i in values])
     #print values
     
     if values[2] & 1 == 1:
