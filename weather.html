@@ -4,14 +4,15 @@
 
 <h1>Weather readings</h1>
 <h2>
-
-Temperature(Server Cabinet):<div id="temp_in"></div><br>
-Temperature(Kitchen):<div id="temp"></div><br>
-Temperature(Attic):<div id="temp_ext_b"></div><br>
-Temperature(Remote):<div id="temp_remote_a"></div><br>
-Temperature(Outside):<div id="temp_outside"></div><br>
-Pressure:<div id="pressure"></div><br>
-
+<table>
+<tr><td>Temperature(Server Cabinet):</td><td><div id="temp_in"></div></td></tr>
+<tr><td>Temperature(Kitchen):</td><td><div id="temp"></div></td></tr>
+<tr><td>Temperature(Attic):</td><td><div id="temp_ext_b"></div></td></tr>
+<tr><td>Temperature(Remote):</td><td><div id="temp_remote_a"></div></td></tr>
+<tr><td>Temperature(Outside):</td><td><div id="temp_outside"></div></td></tr>
+<tr><td>Pressure:</td><td><div id="pressure"></div></td></tr>
+<tr><td>Humidity:</td><td><div id="humidity"></div><td></td><td><div id="hum_temp"></div></td></tr>
+</table>
 Shed outside lights <a href="/lights/status" onclick="return lightLink(event)">Status</a>
 <a href="/lights/on" id="light_on" onclick="return lightLink(event)">On</a>
 <a href="/lights/off" id="light_off" onclick="return lightLink(event)">Off</a><br>
@@ -89,41 +90,71 @@ function handle_event(event)
 {
         arg = JSON.parse(event.data);
 	//console.log(arg);
-	if (arg[0] == "1")
+/*	if (arg[0] == "1")
 	{
         switch(arg[2])
         {
-            case "1":
+            case "2":
                 document.getElementById("temp_in").innerHTML = (arg[3]/100) + "&deg;C";
                 break;
-            case "2":
+            case "6":
                 document.getElementById("temp").innerHTML = (arg[3]/100) + "&deg;C";
                 break;
-            case "5":
+            case "8":
                 document.getElementById("temp_ext_b").innerHTML = (arg[3]/100) + "&deg;C";
                 break;
-            case "3":
+            case "4":
                 document.getElementById("pressure").innerHTML = (arg[3]/100);
                 break;
         }
-	}
-	if (arg[0] == "3")
+	}*/
+	/*if (arg[0] == "3")
 	{
         switch(arg[2])
         {
-            case "2":
+            case "4":
                 document.getElementById("temp_remote_a").innerHTML = (arg[3]/100) + "&deg;C";
                 break;
         }
+	}*/
+    if (arg[0] == "Pressure/1-4")
+	{
+	  document.getElementById("pressure").innerHTML = (arg[3]/1000) + " mbar";
 	}
-	if (arg[0] == "28-031600af4bff")
+    if (arg[0] == "Temp/1-2")
+	{
+	  document.getElementById("temp_in").innerHTML = (arg[3]/1000) + "&deg;C";
+	}
+	if (arg[0] == "Temp/28-031600ae92ff")
+	{
+	  document.getElementById("temp").innerHTML = (arg[3]/1000) + "&deg;C";
+	}	
+	if (arg[0] == "Temp/28-031600d609ff")
+	{
+	  document.getElementById("temp_ext_b").innerHTML = (arg[3]/1000) + "&deg;C";
+	}
+	if (arg[0] == "Temp/28-0316004bc2ff")
+	{
+	  document.getElementById("temp_remote_a").innerHTML = parseFloat(arg[3])/1000 + "&deg;C";
+	}
+	if (arg[0] == "Temp/28-031600af4bff")
 	{
 	  document.getElementById("temp_outside").innerHTML = parseFloat(arg[3])/1000 + "&deg;C";
 	}
+	if (arg[0] == "Hummidity/DHT2302/17")
+	{
+	  document.getElementById("humidity").innerHTML = Number(parseFloat(arg[3])).toFixed(1) + "&#37;";
+	}
+	if (arg[0] == "Temp/DHT2302/17")
+	{
+	  document.getElementById("hum_temp").innerHTML = Number(parseFloat(arg[3])).toFixed(1) + "&deg;C";
+	}
+	
 	if (arg[0] == "shed-led")
 	{
 	  set_labels(arg[2],arg[3]);
 	}
+	console.log(arg)
         //document.getElementById("result").innerHTML += event.data + "<br>";
 };
 
