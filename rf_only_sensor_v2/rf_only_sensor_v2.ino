@@ -40,6 +40,7 @@ byte sensors;
 byte sequence_no=0;
 byte source_addr=0xf0; // Unconfigured source address.
 OneWire  ds(17);  // on pin 10 (a 4.7K resistor is necessary)
+bool mppl_pesent;
 
 #define SETUP_ADDRESS 0xf0
 
@@ -48,8 +49,10 @@ OneWire  ds(17);  // on pin 10 (a 4.7K resistor is necessary)
 
 #define FASTMODE_TIMEOUT 100
 
-#define PAYLOAD_TEMP_BASE       0x4
+#define PAYLOAD_TEMP_BASE       0x12
 #define PAYLOAD_BUTTON          0x10
+#define PAYLOAD_TEMP_INTERNAL   0x2
+#define PAYLOAD_PRESSURE        0x4
 
 #define PAYLOAD_PING            0x80
 #define PAYLOAD_SETUP           0x81
@@ -58,8 +61,7 @@ OneWire  ds(17);  // on pin 10 (a 4.7K resistor is necessary)
 #define PAYLOAD_TYPE_HEX_1WIRE  0x1
 #define PAYLOAD_TYPE_ASCII      0x2
 
-#define PAYLOAD_LENGTH          30
-
+#define PAYLOAD_LENGTH          16
 bool SendRadioMessageRouted(char *buffer, int buffer_length)
 {
   char count = 0;
@@ -113,6 +115,7 @@ void setup() {
   digitalWrite(20, 0);
   
   delay(5000);
+  mppl_pesent = mppl3115a2_setup();
   initSensor();
 
   for(count = 0; count < MAX_NEIGHBOURS; count++)
@@ -323,6 +326,41 @@ void loop()
       }
     }
   }
+}
+
+void handle_mppl()
+{
+  int temperature;
+  int pressure = readPressure() * 10;
+  Serial.print(" Pressure(Pa):");
+  Serial.println(pressure);
+  memset(message_payload,0,sizeof(message_payload));
+  create_payload(0x2,PAYLOAD_PRESSURE,pressure);
+  SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
+  sendFastMode((uint8_t *)message_payload,sizeof(message_payload));
+  
+  readTemp(&temperature);
+  Serial.print(" Temp(c):");
+  Serial.println(temperature);
+  create_payload(0x2,PAYLOAD_TEMP_INTERNAL,temperature);
+  SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
+  sendFastMode((uint8_t *)message_payload,sizeof(message_payload));
+    
+  message_payload[2] = SOURCE_ADDRESS;
+  message_payload[3] = 0x2;
+  message_payload[4] = PAYLOAD_TEMP_INTERNAL+1;
+  message_payload[5] = PAYLOAD_TYPE_ASCII;
+  strcpy((char *)&message_payload[6],"Temp");
+  SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
+  sendFastMode((uint8_t *)message_payload, 16);
+  
+  message_payload[2] = SOURCE_ADDRESS;
+  message_payload[3] = 0x2;
+  message_payload[4] = PAYLOAD_PRESSURE+1;
+  message_payload[5] = PAYLOAD_TYPE_ASCII;
+  strcpy((char *)&message_payload[6],"Pressure");
+  SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
+  sendFastMode((uint8_t *)message_payload, 16);
 }
 
 int sendFastMode(uint8_t *buffer,uint8_t size)
