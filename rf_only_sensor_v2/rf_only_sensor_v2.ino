@@ -12,6 +12,8 @@
 #include "usb_serial.h"
 #include "libmaple/usb_cdcacm.h"
 
+#define STATUS_LED     18
+
 #define BUTTONS        3
 #define MAX_SENSORS    8
 #define MAX_NEIGHBOURS 8
@@ -45,7 +47,7 @@ bool mppl_pesent;
 #define SETUP_ADDRESS 0xf0
 
 #define SOURCE_ADDRESS source_addr
-#define DEST_ADDRESS 0xfe
+#define DEST_ADDRESS 0xfe          // 0xfe is a special address which defines any internet connected device. 
 
 #define FASTMODE_TIMEOUT 100
 
@@ -206,72 +208,52 @@ void loop()
           }
         }
      }
-     if (message_payload[3] == SOURCE_ADDRESS)
-     {
-        switch(message_payload[4])
-        {
-          case PAYLOAD_BUTTON:
-          {
-            char button_no = message_payload[5];
-            if(button_no < BUTTONS && buttons[button_no].output != 0xff)
-            {
-              //Serial.print("Set LED");Serial.print((int)button_no);Serial.print(",");Serial.println(message_payload[6]);
-              digitalWrite(buttons[button_no].output,message_payload[6]);
-            }   
-          }
-          break;
-          case PAYLOAD_SETUP:
-            if (message_payload[3] == SETUP_ADDRESS)
-            {
-              EEPROM.write(0x0, (uint16)message_payload[5]);
-              setup();
-            }
-            break;
-        }
-     }
+     handle_request(message_payload);
   }
   long millis_a = millis();
   
   if (source_addr != SETUP_ADDRESS)
   {
-    digitalWrite(18, millis_a - received_millis < 1200 ? (millis_a / 1000) & 0x1 : 0);
+    digitalWrite(STATUS_LED, millis_a - received_millis < 1200 ? (millis_a / 1000) & 0x1 : 0);
   }
   else
   {
-    digitalWrite(18, (millis_a / 250) & 0x1);
+    digitalWrite(STATUS_LED, (millis_a / 250) & 0x1);
   }
   if (millis_a - past_millis >= 1200)
   {
     int temperature;
+    byte len;
     char count;
     for(count = 0; count < sensors; count++)
     {
       readTempreture(&temperature,addr[count]);
-      create_payload(DEST_ADDRESS,PAYLOAD_TEMP_BASE+(count *2),temperature);
-      SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-      //sendFastMode((uint8_t *)message_payload,sizeof(message_payload));
-
+      len = create_payload(DEST_ADDRESS,PAYLOAD_TEMP_BASE+(count *2),temperature);
+      SendRadioMessageRouted((char *)&message_payload[2], len);
+      sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
+      
       message_payload[2] = SOURCE_ADDRESS;
       message_payload[3] = DEST_ADDRESS;
       message_payload[4] = PAYLOAD_TEMP_BASE+(count *2)+1;
       message_payload[5] = PAYLOAD_TYPE_HEX_1WIRE;
       memcpy(&message_payload[6],addr[count],8);
       SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-
+      sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
+      
       startSensorConversion(addr[count]);
       delay(50);
     }
-  
+
+    if (mppl_pesent) {handle_mppl();}
+    
     message_payload[2] = SOURCE_ADDRESS;
     message_payload[3] = DEST_ADDRESS;
     message_payload[4] = PAYLOAD_BUTTON+1;
     message_payload[5] = PAYLOAD_TYPE_ASCII;
     strcpy((char *)&message_payload[6],"Button");
     SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-
-    /*memset(message_payload,0,sizeof(message_payload));
-    create_payload(0x1,0x1,count++);
-    SendRadioMessage((char *)&message_payload[2], 16);*/
+    sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
+    
     {
       Serial.print("Neighbor:");
       bool overflow = false;
@@ -328,39 +310,68 @@ void loop()
   }
 }
 
+void handle_request(byte *request)
+{
+  if (request[3] == SOURCE_ADDRESS)
+  {
+    switch(request[4])
+    {
+    case PAYLOAD_BUTTON:
+      {
+        char button_no = request[5];
+        if(button_no < BUTTONS && buttons[button_no].output != 0xff)
+        {
+          //Serial.print("Set LED");Serial.print((int)button_no);Serial.print(",");Serial.println(message_payload[6]);
+          digitalWrite(buttons[button_no].output,request[6]);
+        }   
+      }
+      break;
+      case PAYLOAD_SETUP:
+        if (request[3] == SETUP_ADDRESS)
+        {
+          EEPROM.write(0x0, (uint16)request[5]);
+          setup();
+        }
+        break;
+    }
+  }
+}
+
 void handle_mppl()
 {
+  int len;
   int temperature;
   int pressure = readPressure() * 10;
   Serial.print(" Pressure(Pa):");
   Serial.println(pressure);
+  
   memset(message_payload,0,sizeof(message_payload));
-  create_payload(0x2,PAYLOAD_PRESSURE,pressure);
-  SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
+  len = create_payload(DEST_ADDRESS,PAYLOAD_PRESSURE,pressure);
+  SendRadioMessageRouted((char *)&message_payload[2], len);
   sendFastMode((uint8_t *)message_payload,sizeof(message_payload));
   
   readTemp(&temperature);
   Serial.print(" Temp(c):");
   Serial.println(temperature);
-  create_payload(0x2,PAYLOAD_TEMP_INTERNAL,temperature);
-  SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
+  len = create_payload(DEST_ADDRESS,PAYLOAD_TEMP_INTERNAL,temperature);
+  SendRadioMessageRouted((char *)&message_payload[2], len);
   sendFastMode((uint8_t *)message_payload,sizeof(message_payload));
     
   message_payload[2] = SOURCE_ADDRESS;
-  message_payload[3] = 0x2;
+  message_payload[3] = DEST_ADDRESS;
   message_payload[4] = PAYLOAD_TEMP_INTERNAL+1;
   message_payload[5] = PAYLOAD_TYPE_ASCII;
   strcpy((char *)&message_payload[6],"Temp");
+  sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
   SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-  sendFastMode((uint8_t *)message_payload, 16);
   
   message_payload[2] = SOURCE_ADDRESS;
-  message_payload[3] = 0x2;
+  message_payload[3] = DEST_ADDRESS;
   message_payload[4] = PAYLOAD_PRESSURE+1;
   message_payload[5] = PAYLOAD_TYPE_ASCII;
   strcpy((char *)&message_payload[6],"Pressure");
+  sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
   SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-  sendFastMode((uint8_t *)message_payload, 16);
 }
 
 int sendFastMode(uint8_t *buffer,uint8_t size)
@@ -372,6 +383,7 @@ int sendFastMode(uint8_t *buffer,uint8_t size)
   {
     return 0;
   }
+
   while(!(return_value=sendFastTxCallback(buffer,size)))
   {
     if (millis() - timeout_time > FASTMODE_TIMEOUT)
@@ -383,7 +395,7 @@ int sendFastMode(uint8_t *buffer,uint8_t size)
   return return_value;
 }
 
-void create_payload(uint8 dest,uint8 type, int payload)
+int create_payload(uint8 dest,uint8 type, int payload)
 {
   message_payload[2] = SOURCE_ADDRESS;
   message_payload[3] = dest;
@@ -392,6 +404,8 @@ void create_payload(uint8 dest,uint8 type, int payload)
   int *payload_ptr = (int *) (&message_payload[5]);
 
   *payload_ptr = payload;
+  
+  return 10;
 }
 
 #define FAST_BUS_SEND_RADIO_MESSAGE 0x4000
@@ -402,11 +416,13 @@ void fastDataRxCb(uint32 ep_rx_size, uint8 *ep_rx_data)
   uint32_t count;
   uint16_t *data_buffer = (uint16_t *)ep_rx_data; 
   
-  x = data_buffer[0];;
+  x = data_buffer[0];
 
   if (x == 0x4000)
   {
     byte *buf = (byte *)(&data_buffer[1]);
+
+    handle_request((byte *)data_buffer);
     
     SendRadioMessage(buf[1],(char *)buf, ep_rx_size-2);
     return;
