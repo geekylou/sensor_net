@@ -3,6 +3,7 @@ import sys
 import time
 import os
 import struct
+import threading
 
 import usb.core
 import usb.util
@@ -38,7 +39,7 @@ class TFT_FastBus(MyOled):
     def __init__(self): 
         #super(TFT_FastBus, self).__init__()
         self.dev = usb.core.find(idVendor=0x1eaf,idProduct=0x0006)
-       
+        self.write_lock = threading.RLock()
         
         for interface in self.dev[0]:
             if interface.bInterfaceClass == 0xff:
@@ -137,16 +138,20 @@ class TFT_FastBus(MyOled):
         self.fast_endpoint.write(struct.pack("<HH",0x1000,0x1000))          
     
     def write(self,str):
+        self.write_lock.acquire()
         self.fast_endpoint.write(struct.pack("<H",0x1000) + str)
+        self.write_lock.release()
         
     def write_radio(self,str):
-        self.fast_endpoint.write(struct.pack("<H",0x4000) + str)
+        self.write_lock.acquire()
+        self.fast_endpoint.write(struct.pack("<H",0x4000) + str, timeout=5000)
+        self.write_lock.release()
         
     def read(self):
         try:
-            print(self.rx_endpoint.wMaxPacketSize)
+            #print(self.rx_endpoint.wMaxPacketSize)
             recv_data = self.rx_endpoint.read(self.rx_endpoint.wMaxPacketSize, timeout=5000)
-            args =  struct.unpack("<BBBi", recv_data[2:9])
+            args =  struct.unpack("<BBBiB", recv_data[2:10])
             if(args[2] & 1 == 1):
                 print(recv_data[5])
                 if recv_data[5]== 1: # Onewire bus address of sensor.
@@ -164,6 +169,7 @@ class TFT_FastBus(MyOled):
                     data = [bytearray(name).decode('UTF-8')+"/"+str(args[0])+"-"+str(args[2] & ~0x1)]
                 return tuple(list(args[0:3]) + data)
             else:
+                print(args)
                 return args
             #str_out = ""
             #for ch in str[2:]:
@@ -174,6 +180,7 @@ class TFT_FastBus(MyOled):
         except usb.core.USBError as e:
             if e.backend_error_code != -116:
                 raise e
+            return ()
             print e
 class GLCD():
     def __init__(self):
@@ -265,6 +272,7 @@ if __name__ == "__main__":
             pressure = -1
             wrote_log = False
             min = time.gmtime().tm_min
+        #values = (1,2,3,4)#tft.read()
         values = tft.read()
         print(values)
         if values[2] == 1 and internal_temp == -1:

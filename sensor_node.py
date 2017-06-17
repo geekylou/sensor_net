@@ -6,6 +6,7 @@ import struct
 import urllib2
 import threading
 import sys
+import traceback
 
 global internal_temp
 global external_temp
@@ -73,25 +74,49 @@ t = threading.Thread(target=radio_thread)
 t.start()
 # We cannot shutdown the main loop until the Radio loop has finished so we wait until the radio loop has shutdown
 # by waiting for ended = True
-while thread_ended == False:
-    try:
-        args = sock_sub.recv_multipart()#zmq.NOBLOCK)
+
+def handle_packet(args):
         sock_live.send_multipart(args)
         print("args:",args)
-        if args[0] == "pair":
+        if args[1] == "pair":
             print("pair ***************************************************************")
             print(long_values)
             tft.write_radio(struct.pack("<BBBB", 1,0xf0, 0x81, int(args[2])))
         if args[0] == "shed-led":
-            #print("args:",args)
-            tft.write_radio(struct.pack("<BBBBB", 1,3, 0xc, int(args[2])+1, int(args[3])))
-            
+            print("args:",args)
+            tft.write_radio(struct.pack("<BBBBB", 1,3, 0x10, int(args[2])+1, int(args[3])))
+            print("send done")
         if long_values.has_key(args[1]):
             values = long_values[args[1]]
             print "send:",values
             print args
             tft.write_radio(struct.pack("<BBBBB", 1, values[0], values[1], int(args[2]), int(args[3])))
+            print "send done"
+
+last_seen={}
             
+while thread_ended == False:
+    try:
+        args = sock_sub.recv_multipart()#zmq.NOBLOCK)
+
+        # If the packet has a sequence no. then check the sequence no. is not from a previous packet.
+        # we also need to handle wrap around as the sequence no. is a 8bit value.
+        if len(args) > 4:
+            if not last_seen.has_key(args[0]):
+                last_seen[args[0]] = args
+            else:
+                if int(args[4]) > int(last_seen[args[0]][4]):
+                    handle_packet(args)
+                    
+                    last_seen[args[0]] = args
+                else:
+                    if (int(last_seen[args[0]][4])-int(args[4])) > 200:
+                        last_seen[args[0]] = args
+                        
+                        handle_packet(args)
+        else:
+            handle_packet(args)
+                        
     except zmq.ZMQError as e:
         print(e)
     except:
