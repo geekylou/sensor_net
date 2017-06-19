@@ -388,6 +388,7 @@ int sendFastMode(uint8_t *buffer,uint8_t size)
   {
     if (millis() - timeout_time > FASTMODE_TIMEOUT)
     {
+      resetFastTxCallback();
       break;
     }
     delay(1);
