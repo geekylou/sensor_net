@@ -60,10 +60,7 @@ def radio_thread():
                 if (long_names.has_key(long_name)):
                     values_long = [long_names[long_name],"*","1",str(values[3]),str(values[4])]
                     #print("Radio_long",values_long)
-                    sock_send.send_multipart([str(i) for i in values_long])
-                    
-            if values[0] == 3 and values[2] == 16:
-                print urllib2.urlopen("http://house-nas/lights/toggle?light="+str(values[3]-1)).read()
+                    sock_send.send_multipart([str(i) for i in values_long])                    
     except:
         traceback.print_exc(file=sys.stderr)
   print("ended")
@@ -78,14 +75,18 @@ t.start()
 def handle_packet(args):
         sock_live.send_multipart(args)
         print("args:",args)
+        
+        if args[0] == "Button/3-16":
+            print urllib2.urlopen("http://house-nas/lights/toggle?light="+str(values[3]-1)).read()
+
         if args[1] == "pair":
             print("pair ***************************************************************")
             print(long_values)
             tft.write_radio(struct.pack("<BBBB", 1,0xf0, 0x81, int(args[2])))
-        if args[0] == "shed-led":
-            print("args:",args)
-            tft.write_radio(struct.pack("<BBBBB", 1,3, 0x10, int(args[2])+1, int(args[3])))
-            print("send done")
+        #if args[0] == "shed-led":
+        #    print("args:",args)
+        #    tft.write_radio(struct.pack("<BBBBB", 1,3, 0x10, int(args[2])+1, int(args[3])))
+        #    print("send done")
         if long_values.has_key(args[1]):
             values = long_values[args[1]]
             print "send:",values
@@ -120,6 +121,7 @@ while thread_ended == False:
     except zmq.ZMQError as e:
         print(e)
     except:
+        traceback.print_exc(file=sys.stderr)
         print("Shutdown, error:", sys.exc_info()[0])
         running=False
 

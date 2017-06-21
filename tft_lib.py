@@ -144,7 +144,7 @@ class TFT_FastBus(MyOled):
         
     def write_radio(self,str):
         self.write_lock.acquire()
-        self.fast_endpoint.write(struct.pack("<H",0x4000) + str, timeout=5000)
+        self.fast_endpoint.write(struct.pack("<H",0x4000) + str, timeout=1000)
         self.write_lock.release()
         
     def read(self):
