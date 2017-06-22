@@ -179,7 +179,7 @@ void loop()
      int buffer_length;
      memset(message_payload,0,sizeof(message_payload));
      ReceiveRadioMessage((char *)&message_payload[2],&buffer_length);
-     sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
+     sendFastMode((uint8_t *)message_payload, buffer_length+2);
      received_millis = millis();
 
      // Check it's for us
@@ -227,11 +227,12 @@ void loop()
     char count;
     for(count = 0; count < sensors; count++)
     {
-      readTempreture(&temperature,addr[count]);
-      len = create_payload(DEST_ADDRESS,PAYLOAD_TEMP_BASE+(count *2),temperature);
-      SendRadioMessageRouted((char *)&message_payload[2], len);
-      sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
-      
+      if (readTempreture(&temperature,addr[count]))
+      {
+        len = create_payload(DEST_ADDRESS,PAYLOAD_TEMP_BASE+(count *2),temperature);
+        SendRadioMessageRouted((char *)&message_payload[2], len);
+        sendFastMode((uint8_t *)message_payload, len);
+      }
       message_payload[2] = SOURCE_ADDRESS;
       message_payload[3] = DEST_ADDRESS;
       message_payload[4] = PAYLOAD_TEMP_BASE+(count *2)+1;
@@ -326,13 +327,13 @@ void handle_request(byte *request)
         }   
       }
       break;
-      case PAYLOAD_SETUP:
-        if (request[3] == SETUP_ADDRESS)
-        {
-          EEPROM.write(0x0, (uint16)request[5]);
-          setup();
-        }
-        break;
+    case PAYLOAD_SETUP:
+      if (request[3] == SETUP_ADDRESS)
+      {
+        EEPROM.write(0x0, (uint16)request[5]);
+        setup();
+      }
+      break;
     }
   }
 }
@@ -389,6 +390,7 @@ int sendFastMode(uint8_t *buffer,uint8_t size)
     if (millis() - timeout_time > FASTMODE_TIMEOUT)
     {
       resetFastTxCallback();
+      Serial.println("resetFastTxCallback");
       break;
     }
     delay(1);
@@ -416,7 +418,7 @@ void fastDataRxCb(uint32 ep_rx_size, uint8 *ep_rx_data)
   int x;
   uint32_t count;
   uint16_t *data_buffer = (uint16_t *)ep_rx_data; 
-  
+  Serial.println("fastDataRxCb");
   x = data_buffer[0];
 
   if (x == 0x4000)

@@ -100,8 +100,8 @@ signed int readTempreture(int *tempreture,byte *addr)
   *tempreture = (raw * 625)/10;
   Serial.print(" Raw:");
   Serial.print(*tempreture);
-  Serial.println(" Celsius, ");
-  return 1;
+  Serial.println(" Celsius");
+  return present;
 }
 
 

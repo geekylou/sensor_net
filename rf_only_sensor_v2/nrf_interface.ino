@@ -13,7 +13,7 @@ void nrf_init(byte source_addr)
   radio.begin();
 
   // optionally, increase the delay between retries & # of retries
-  radio.setRetries(10,10);
+  radio.setRetries(5,15);
 
   // optionally, reduce the payload size.  seems to
   // improve reliability
@@ -35,11 +35,12 @@ void nrf_init(byte source_addr)
 bool SendRadioMessage(byte dest,char *buffer, int buffer_length)
 {
   Serial.print("Send:");Serial.print(dest);Serial.print(" ");
+  radio.setAutoAck(dest != 0xff);
   radio.stopListening();
   radio.openWritingPipe(pipe + dest);
   bool return_value = radio.write( buffer, buffer_length );
-  Serial.println(return_value);
   radio.startListening();
+  Serial.println(return_value);
   return return_value;
 }
 
