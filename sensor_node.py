@@ -58,7 +58,7 @@ def radio_thread():
                 long_name = str(values[0])+"-"+str(values[2] & ~1)
                 #print("long_name",long_name)
                 if (long_names.has_key(long_name)):
-                    values_long = [long_names[long_name],"*","1",str(values[3]),str(values[4])]
+                    values_long = [long_names[long_name],"*",str(values[0]),str(values[3]),str(values[4])]
                     #print("Radio_long",values_long)
                     sock_send.send_multipart([str(i) for i in values_long])                    
     except:
@@ -77,7 +77,7 @@ def handle_packet(args):
         print("args:",args)
         
         if args[0] == "Button/3-16":
-            print urllib2.urlopen("http://house-nas/lights/toggle?light="+str(values[3]-1)).read()
+            print urllib2.urlopen("http://house-nas/lights/toggle?light="+str(int(args[3])-1)).read()
 
         if args[1] == "pair":
             print("pair ***************************************************************")
@@ -103,18 +103,22 @@ while thread_ended == False:
         # If the packet has a sequence no. then check the sequence no. is not from a previous packet.
         # we also need to handle wrap around as the sequence no. is a 8bit value.
         if len(args) > 4:
-            if not last_seen.has_key(args[0]):
-                last_seen[args[0]] = args
+            if not last_seen.has_key(args[2]):
+                last_seen[args[2]] = (args,time.time())
+                handle_packet(args)
             else:
-                if int(args[4]) > int(last_seen[args[0]][4]):
+                if int(args[4]) > int(last_seen[args[2]][0][4]) or time.time()-last_seen[args[2]][1] > 2.0:
+                    #print("seq:",last_seen[args[2]],args)
+                    print(last_seen)
                     handle_packet(args)
                     
-                    last_seen[args[0]] = args
+                    last_seen[args[2]] = (args,time.time())
                 else:
-                    if (int(last_seen[args[0]][4])-int(args[4])) > 200:
-                        last_seen[args[0]] = args
+                    if (int(last_seen[args[2]][0][4])-int(args[4])) > 200:
+                        last_seen[args[2]] = (args,time.time())
                         
                         handle_packet(args)
+                    print("time:",time.time()-last_seen[args[2]][1])
         else:
             handle_packet(args)
                         

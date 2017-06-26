@@ -151,6 +151,8 @@ class TFT_FastBus(MyOled):
         try:
             #print(self.rx_endpoint.wMaxPacketSize)
             recv_data = self.rx_endpoint.read(self.rx_endpoint.wMaxPacketSize, timeout=5000)
+            if (len(recv_data) < 10):
+                return []
             args =  struct.unpack("<BBBiB", recv_data[2:10])
             if(args[2] & 1 == 1):
                 print(recv_data[5])
