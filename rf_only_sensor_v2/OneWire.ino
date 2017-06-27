@@ -49,7 +49,14 @@ signed int searchSensor(byte *addr)
 }
 
 void startSensorConversion(byte *addr)
-{
+{ 
+  int i; 
+  Serial.print("Addr =");
+  for( i = 0; i < 8; i++) {
+    Serial.write(' ');
+    Serial.print(addr[i], HEX);
+  }
+  Serial.println();
   ds.reset();
   ds.select(addr);
   ds.write(0x44, 1);        // start conversion, with parasite power on at the end
@@ -76,6 +83,8 @@ signed int readTempreture(int *tempreture,byte *addr)
   Serial.print(" CRC=");
   Serial.print(OneWire::crc8(data, 8), HEX);
   Serial.println();
+  if (data[8] != OneWire::crc8(data, 8))
+    present = -1;
 
   // Convert the data to actual temperature
   // because the result is a 16 bit signed integer, it should
@@ -103,5 +112,4 @@ signed int readTempreture(int *tempreture,byte *addr)
   Serial.println(" Celsius");
   return present;
 }
-
 

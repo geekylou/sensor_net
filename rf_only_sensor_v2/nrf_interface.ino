@@ -75,5 +75,3 @@ bool ReceiveRadioMessage(char *buffer, int *buffer_length)
     Serial.write('\n');
   }
 }
-
-

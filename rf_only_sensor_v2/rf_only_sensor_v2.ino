@@ -35,14 +35,19 @@ neighbour neighbours[MAX_NEIGHBOURS];
 button buttons[BUTTONS];
 
 byte message_payload[30];
-long past_millis,received_millis;
-byte addr[MAX_SENSORS][8];
+long past_millis,past_millis_ident,received_millis;
+
+byte sensor_addr[MAX_SENSORS][8];
 byte sensors;
+
+int sensor_count;
 
 byte sequence_no=0;
 byte source_addr=0xf0; // Unconfigured source address.
 OneWire  ds(17);  // on pin 10 (a 4.7K resistor is necessary)
 bool mppl_pesent;
+
+uint16 config_settings;
 
 #define SETUP_ADDRESS 0xf0
 
@@ -51,6 +56,8 @@ bool mppl_pesent;
 
 #define FASTMODE_TIMEOUT 100
 
+#define FAST_BUS_SEND_RADIO_MESSAGE 0x4000
+
 #define PAYLOAD_TEMP_BASE       0x12
 #define PAYLOAD_BUTTON          0x10
 #define PAYLOAD_TEMP_INTERNAL   0x2
@@ -58,7 +65,7 @@ bool mppl_pesent;
 
 #define PAYLOAD_PING            0x80
 #define PAYLOAD_SETUP           0x81
-
+#define PAYLOAD_CONFIG          0x82
 
 #define PAYLOAD_TYPE_HEX_1WIRE  0x1
 #define PAYLOAD_TYPE_ASCII      0x2
@@ -83,7 +90,7 @@ bool SendRadioMessageRouted(char *buffer, int buffer_length)
   {
     byte old_addr = addr;
 
-    retval |= SendRadioMessage(addr, buffer, buffer_length);
+    retval |= SendRadioMessage(addr, &buffer[2], buffer_length - 2);
     
     addr = 0xff;
     score = 0;  
@@ -99,7 +106,7 @@ bool SendRadioMessageRouted(char *buffer, int buffer_length)
 
     if (addr != 0xff)
     {
-       retval |= SendRadioMessage(addr, buffer, buffer_length);
+       retval |= SendRadioMessage(addr, &buffer[2], buffer_length - 2);
     }
   }
   return retval;
@@ -116,7 +123,7 @@ void setup() {
   digitalWrite(19, 0);
   digitalWrite(20, 0);
   
-  delay(5000);
+  delay(3000);
   mppl_pesent = mppl3115a2_setup();
   initSensor();
 
@@ -128,7 +135,7 @@ void setup() {
   
   for(count = 0; count < MAX_SENSORS; count++)
   {
-    if (searchSensor(addr[count]) == 2)
+    if (searchSensor(sensor_addr[count]) == 2)
     {
       Serial.println("break");
       
@@ -137,12 +144,8 @@ void setup() {
   }
   Serial.println((int)count);
   sensors = count;
-
-  for(count = 0; count < sensors; count++)
-  {
-    startSensorConversion(addr[0]);
-  }
-  
+  sensor_count = 0;
+  startSensorConversion(sensor_addr[0]);
 
   pinMode(32, INPUT_PULLUP);
   buttons[0].input = 32;
@@ -224,38 +227,32 @@ void loop()
   {
     int temperature;
     byte len;
-    char count;
-    for(count = 0; count < sensors; count++)
+    int present;
+    
+    if (sensors > 0)
     {
-      if (readTempreture(&temperature,addr[count]))
+      present = readTempreture(&temperature,sensor_addr[sensor_count]);
+      Serial.print("Sensor:");Serial.print(present);Serial.println(sensor_count);
+      if (present >0)
       {
-        len = create_payload(DEST_ADDRESS,PAYLOAD_TEMP_BASE+(count *2),temperature);
-        SendRadioMessageRouted((char *)&message_payload[2], len);
+        len = create_payload_int(DEST_ADDRESS,PAYLOAD_TEMP_BASE+(sensor_count *2),temperature);
+        SendRadioMessageRouted((char *)message_payload, len);
         sendFastMode((uint8_t *)message_payload, len);
       }
-      message_payload[2] = SOURCE_ADDRESS;
-      message_payload[3] = DEST_ADDRESS;
-      message_payload[4] = PAYLOAD_TEMP_BASE+(count *2)+1;
-      message_payload[5] = PAYLOAD_TYPE_HEX_1WIRE;
-      memcpy(&message_payload[6],addr[count],8);
-      SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-      sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
-      
-      startSensorConversion(addr[count]);
-      delay(50);
+   
+      sensor_count++;
+      if (sensor_count >= sensors)
+      {
+        sensor_count = 0;
+      }
+      startSensorConversion(sensor_addr[sensor_count]);
     }
-
+    past_millis = millis();
+    
     if (mppl_pesent) {handle_mppl();}
     
-    message_payload[2] = SOURCE_ADDRESS;
-    message_payload[3] = DEST_ADDRESS;
-    message_payload[4] = PAYLOAD_BUTTON+1;
-    message_payload[5] = PAYLOAD_TYPE_ASCII;
-    strcpy((char *)&message_payload[6],"Button");
-    SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-    sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
-    
     {
+      char count;
       Serial.print("Neighbor:");
       bool overflow = false;
       for(count = 0; count < MAX_NEIGHBOURS; count++)
@@ -283,11 +280,33 @@ void loop()
         }
       }
     }
-    past_millis = millis_a;
+    // past_millis = millis(); is set when conversion is initiated!
   }
-
+  if (millis_a - past_millis_ident >= 5000)
   {
-    int button;
+    int len,index;
+
+    if (mppl_pesent) {handle_mppl_ident();}
+    
+    len = create_payload_description(DEST_ADDRESS,PAYLOAD_BUTTON+1, PAYLOAD_TYPE_ASCII,"Button");
+    sendFastMode((uint8_t *)message_payload, len);
+    SendRadioMessageRouted((char *)message_payload, len);
+
+    len = create_payload_description(DEST_ADDRESS,PAYLOAD_CONFIG+1, PAYLOAD_TYPE_ASCII,"Config");
+    sendFastMode((uint8_t *)message_payload, len);
+    SendRadioMessageRouted((char *)message_payload, len);
+
+    for (index=0;index<sensors;index++)
+    {
+      len = create_payload_description(DEST_ADDRESS,PAYLOAD_TEMP_BASE+(index *2)+1, PAYLOAD_TYPE_HEX_1WIRE,(char *)sensor_addr[index]);
+      sendFastMode((uint8_t *)message_payload, len);
+      SendRadioMessageRouted((char *)message_payload, len);
+    }
+    
+    past_millis_ident = millis();
+  }
+  {
+    int button,len;
   
     for (button = 0; button < BUTTONS; button++)
     {
@@ -302,9 +321,9 @@ void loop()
         {
           Serial.print("Button:");Serial.println(button);
           buttons[button].pressed = 1;
-          create_payload(DEST_ADDRESS,PAYLOAD_BUTTON,button);
-          SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-          sendFastMode((uint8_t *)message_payload,sizeof(message_payload));   
+          len = create_payload_int(DEST_ADDRESS,PAYLOAD_BUTTON,button);
+          SendRadioMessageRouted((char *)message_payload,len);
+          sendFastMode((uint8_t *)message_payload,len);   
         }
       }
     }
@@ -334,6 +353,10 @@ void handle_request(byte *request)
         setup();
       }
       break;
+    case PAYLOAD_CONFIG:
+      config_settings = (uint16)request[5];
+      EEPROM.write(0x1, (uint16)request[5]);
+      break;
     }
   }
 }
@@ -347,35 +370,31 @@ void handle_mppl()
   Serial.println(pressure);
   
   memset(message_payload,0,sizeof(message_payload));
-  len = create_payload(DEST_ADDRESS,PAYLOAD_PRESSURE,pressure);
-  SendRadioMessageRouted((char *)&message_payload[2], len);
-  sendFastMode((uint8_t *)message_payload,sizeof(message_payload));
+  len = create_payload_int(DEST_ADDRESS,PAYLOAD_PRESSURE,pressure);
+  SendRadioMessageRouted((char *)message_payload, len);
+  sendFastMode((uint8_t *)message_payload,len);
   
   readTemp(&temperature);
   Serial.print(" Temp(c):");
   Serial.println(temperature);
-  len = create_payload(DEST_ADDRESS,PAYLOAD_TEMP_INTERNAL,temperature);
-  SendRadioMessageRouted((char *)&message_payload[2], len);
-  sendFastMode((uint8_t *)message_payload,sizeof(message_payload));
-    
-  message_payload[2] = SOURCE_ADDRESS;
-  message_payload[3] = DEST_ADDRESS;
-  message_payload[4] = PAYLOAD_TEMP_INTERNAL+1;
-  message_payload[5] = PAYLOAD_TYPE_ASCII;
-  strcpy((char *)&message_payload[6],"Temp");
-  sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
-  SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
-  
-  message_payload[2] = SOURCE_ADDRESS;
-  message_payload[3] = DEST_ADDRESS;
-  message_payload[4] = PAYLOAD_PRESSURE+1;
-  message_payload[5] = PAYLOAD_TYPE_ASCII;
-  strcpy((char *)&message_payload[6],"Pressure");
-  sendFastMode((uint8_t *)message_payload, PAYLOAD_LENGTH);
-  SendRadioMessageRouted((char *)&message_payload[2], PAYLOAD_LENGTH);
+  len = create_payload_int(DEST_ADDRESS,PAYLOAD_TEMP_INTERNAL,temperature);
+  SendRadioMessageRouted((char *)message_payload, len);
+  sendFastMode((uint8_t *)message_payload,len);
 }
 
-int sendFastMode(uint8_t *buffer,uint8_t size)
+void handle_mppl_ident()
+{
+  int len;
+  len = create_payload_description(DEST_ADDRESS,PAYLOAD_TEMP_INTERNAL+1, PAYLOAD_TYPE_ASCII,"Temp");
+  sendFastMode((uint8_t *)message_payload, len);
+  SendRadioMessageRouted((char *)message_payload, len);
+  
+  len = create_payload_description(DEST_ADDRESS,PAYLOAD_PRESSURE+1, PAYLOAD_TYPE_ASCII,"Pressure");
+  sendFastMode((uint8_t *)message_payload, len);
+  SendRadioMessageRouted((char *)message_payload, len);
+}
+
+int sendFastMode(uint8_t *buf,uint8_t size)
 {
   int return_value=0;
   int timeout_time = millis();
@@ -385,7 +404,7 @@ int sendFastMode(uint8_t *buffer,uint8_t size)
     return 0;
   }
 
-  while(!(return_value=sendFastTxCallback(buffer,size)))
+  while(!(return_value=sendFastTxCallback(buf,size)))
   {
     if (millis() - timeout_time > FASTMODE_TIMEOUT)
     {
@@ -398,7 +417,7 @@ int sendFastMode(uint8_t *buffer,uint8_t size)
   return return_value;
 }
 
-int create_payload(uint8 dest,uint8 type, int payload)
+int create_payload_int(uint8 dest,uint8 type, int payload)
 {
   message_payload[2] = SOURCE_ADDRESS;
   message_payload[3] = dest;
@@ -411,7 +430,24 @@ int create_payload(uint8 dest,uint8 type, int payload)
   return 10;
 }
 
-#define FAST_BUS_SEND_RADIO_MESSAGE 0x4000
+int create_payload_description(uint8 dest,uint8 type, char description_type,char *payload)
+{
+  char length;
+  message_payload[2] = SOURCE_ADDRESS;
+  message_payload[3] = dest;
+  message_payload[4] = type;
+  message_payload[5] = description_type;
+  switch(description_type & 0xf)
+  {
+    case PAYLOAD_TYPE_ASCII:
+      strcpy((char *)&message_payload[6],payload);
+      return strlen(payload) + 6;
+    case PAYLOAD_TYPE_HEX_1WIRE:
+      memcpy(&message_payload[6],payload,8);
+      return 6+8;
+  }
+  return 5;
+}
 
 void fastDataRxCb(uint32 ep_rx_size, uint8 *ep_rx_data)
 {
@@ -421,7 +457,7 @@ void fastDataRxCb(uint32 ep_rx_size, uint8 *ep_rx_data)
   Serial.println("fastDataRxCb");
   x = data_buffer[0];
 
-  if (x == 0x4000)
+  if (x == FAST_BUS_SEND_RADIO_MESSAGE)
   {
     byte *buf = (byte *)(&data_buffer[1]);
 
