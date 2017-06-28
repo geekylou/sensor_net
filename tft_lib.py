@@ -151,6 +151,7 @@ class TFT_FastBus(MyOled):
         try:
             #print(self.rx_endpoint.wMaxPacketSize)
             recv_data = self.rx_endpoint.read(self.rx_endpoint.wMaxPacketSize, timeout=5000)
+            
             if (len(recv_data) < 10):
                 return []
             args =  struct.unpack("<BBBiB", recv_data[2:10])
@@ -158,7 +159,8 @@ class TFT_FastBus(MyOled):
                 print(recv_data[5])
                 if recv_data[5]== 1: # Onewire bus address of sensor.
                     addr=[]
-                    for byte_data in recv_data[7:-3]:
+                    #print("raw addr:",recv_data)
+                    for byte_data in recv_data[7:13]:
                             addr = [byte_data] + addr               
                     data = ["Temp/"+binascii.hexlify(bytearray([recv_data[6]]))+'-'+binascii.hexlify(bytearray(addr))]
                 else:
