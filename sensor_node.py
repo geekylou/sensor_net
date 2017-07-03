@@ -58,7 +58,8 @@ def radio_thread():
                 long_name = str(values[0])+"-"+str(values[2] & ~1)
                 #print("long_name",long_name)
                 if (long_names.has_key(long_name)):
-                    values_long = [long_names[long_name],"*",str(values[0]),str(values[3]),str(values[4])]
+                    values_dict = { "station_id": values[0], "value" : values[3], "sequence_no": values[4] }
+                    values_long = [long_names[long_name],"*",json.dumps(values_dict),str(values[3])]
                     #print("Radio_long",values_long)
                     sock_send.send_multipart([str(i) for i in values_long])                    
     except:
@@ -83,6 +84,10 @@ def handle_packet(args):
             print("pair ***************************************************************")
             print(long_values)
             tft.write_radio(struct.pack("<BBBB", 1,0xf0, 0x81, int(args[2])))
+        if args[1] == "config":
+            print("config ***************************************************************")
+            print(long_values)
+            tft.write_radio(struct.pack("<BBBB", 1,0xf0, 0x82, int(args[2])))
         #if args[0] == "shed-led":
         #    print("args:",args)
         #    tft.write_radio(struct.pack("<BBBBB", 1,3, 0x10, int(args[2])+1, int(args[3])))
@@ -98,27 +103,36 @@ last_seen={}
             
 while thread_ended == False:
     try:
+        sequence_no = None
+        station_id = None
+        
         args = sock_sub.recv_multipart()#zmq.NOBLOCK)
-
+        print(args)
+        if(args[2] != "1"):
+            args_dict = json.loads(args[2])
+            if type(args_dict) is dict and args_dict.has_key("sequence_no") and args_dict.has_key("station_id"):
+                sequence_no = int(args_dict["sequence_no"])
+                station_id  = int(args_dict["station_id"])
+                
         # If the packet has a sequence no. then check the sequence no. is not from a previous packet.
         # we also need to handle wrap around as the sequence no. is a 8bit value.
-        if len(args) > 4:
-            if not last_seen.has_key(args[2]):
-                last_seen[args[2]] = (args,time.time())
+        if sequence_no != None:
+            if not last_seen.has_key(station_id):
+                last_seen[station_id] = (sequence_no,time.time())
                 handle_packet(args)
             else:
-                if int(args[4]) > int(last_seen[args[2]][0][4]) or time.time()-last_seen[args[2]][1] > 2.0:
-                    #print("seq:",last_seen[args[2]],args)
+                if sequence_no > last_seen[station_id][0] or time.time()-last_seen[station_id][1] > 2.0:
+                    print("seq:",last_seen[station_id],args)
                     print(last_seen)
                     handle_packet(args)
                     
-                    last_seen[args[2]] = (args,time.time())
+                    last_seen[station_id] = (sequence_no,time.time())
                 else:
-                    if (int(last_seen[args[2]][0][4])-int(args[4])) > 200:
-                        last_seen[args[2]] = (args,time.time())
+                    if last_seen[station_id][0]-sequence_no > 200:
+                        last_seen[station_id] = (sequence_no,time.time())
                         
                         handle_packet(args)
-                    print("time:",time.time()-last_seen[args[2]][1])
+                    print("time:",time.time()-last_seen[station_id][1])
         else:
             handle_packet(args)
                         
