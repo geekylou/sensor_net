@@ -77,13 +77,12 @@ HardWire MyWire(1);
 bool mppl3115a2_setup()
 {
   MyWire.begin();        // join i2c bus
-  Serial.begin(57600);  // start serial for output
 delay(3000);
   if(IIC_Read(WHO_AM_I) == 196) 
-    Serial.println("MPL3115A2 online!");
+    DEBUG_OUT.println("MPL3115A2 online!");
   else
   {
-    Serial.println("MPL3115A2 not found.");
+    DEBUG_OUT.println("MPL3115A2 not found.");
     return false;
   }
 
@@ -96,34 +95,6 @@ delay(3000);
   enableEventFlags(); // Enable all three pressure and temp event flags
   return true;
 }
-
-#if 0
-void loop()
-{
-  startTime = millis();
-
-  //float altitude = readAltitude();
-  //Serial.print("Altitude(m):");
-  //Serial.print(altitude, 2);
-
-  //altitude = readAltitudeFt();
-  //Serial.print(" Altitude(ft):");
-  //Serial.print(altitude, 2);
-
-
-
-  //float temperature = readTempF();
-  //Serial.print(" Temp(f):");
-  //Serial.print(temperature, 2);
-  
-  Serial.print(" time diff:");
-  Serial.print(millis() - startTime);
-
-  Serial.println();
-
-  delay(1000);
-}
-#endif
 
 //Returns the number of meters above sea level
 float readAltitude()

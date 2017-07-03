@@ -16,33 +16,33 @@ signed int searchSensor(byte *addr)
   {
     return 2;
   }
-  Serial.print("ROM =");
+  DEBUG_OUT.print("ROM =");
   for( i = 0; i < 8; i++) {
-    Serial.write(' ');
-    Serial.print(addr[i], HEX);
+    DEBUG_OUT.write(' ');
+    DEBUG_OUT.print(addr[i], HEX);
   }
 
   if (OneWire::crc8(addr, 7) != addr[7]) {
-      Serial.println("CRC is not valid!");
+      DEBUG_OUT.println("CRC is not valid!");
       return 2;
   }
-  Serial.println();
+  DEBUG_OUT.println();
  
   // the first ROM byte indicates which chip
   switch (addr[0]) {
     case 0x10:
-      Serial.println("  Chip = DS18S20");  // or old DS1820
+      DEBUG_OUT.println("  Chip = DS18S20");  // or old DS1820
       return_code = 1;
       break;
     case 0x28:
-      Serial.println("  Chip = DS18B20");
+      DEBUG_OUT.println("  Chip = DS18B20");
       return_code = 0;
       break;
     case 0x22:
-      Serial.println("  Chip = DS1822");
+      DEBUG_OUT.println("  Chip = DS1822");
       return_code = 0;
     default:
-      Serial.println("Device is not a DS18x20 family device.");
+      DEBUG_OUT.println("Device is not a DS18x20 family device.");
       return_code = 2;
   }
   return(return_code); 
@@ -51,12 +51,12 @@ signed int searchSensor(byte *addr)
 void startSensorConversion(byte *addr)
 { 
   int i; 
-  Serial.print("Addr =");
+  DEBUG_OUT.print("Addr =");
   for( i = 0; i < 8; i++) {
-    Serial.write(' ');
-    Serial.print(addr[i], HEX);
+    DEBUG_OUT.write(' ');
+    DEBUG_OUT.print(addr[i], HEX);
   }
-  Serial.println();
+  DEBUG_OUT.println();
   ds.reset();
   ds.select(addr);
   ds.write(0x44, 1);        // start conversion, with parasite power on at the end
@@ -72,17 +72,17 @@ signed int readTempreture(int *tempreture,byte *addr)
   ds.select(addr);    
   ds.write(0xBE);         // Read Scratchpad
 
-  Serial.print("  Data = ");
-  Serial.print(present, HEX);
-  Serial.print(" ");
+  DEBUG_OUT.print("  Data = ");
+  DEBUG_OUT.print(present, HEX);
+  DEBUG_OUT.print(" ");
   for ( i = 0; i < 9; i++) {           // we need 9 bytes
     data[i] = ds.read();
-    Serial.print(data[i], HEX);
-    Serial.print(" ");
+    DEBUG_OUT.print(data[i], HEX);
+    DEBUG_OUT.print(" ");
   }
-  Serial.print(" CRC=");
-  Serial.print(OneWire::crc8(data, 8), HEX);
-  Serial.println();
+  DEBUG_OUT.print(" CRC=");
+  DEBUG_OUT.print(OneWire::crc8(data, 8), HEX);
+  DEBUG_OUT.println();
   if (data[8] != OneWire::crc8(data, 8))
     present = -1;
 
@@ -107,9 +107,9 @@ signed int readTempreture(int *tempreture,byte *addr)
     //// default is 12 bit resolution, 750 ms conversion time
   }
   *tempreture = (raw * 625)/10;
-  Serial.print(" Raw:");
-  Serial.print(*tempreture);
-  Serial.println(" Celsius");
+  DEBUG_OUT.print(" Raw:");
+  DEBUG_OUT.print(*tempreture);
+  DEBUG_OUT.println(" Celsius");
   return present;
 }
 

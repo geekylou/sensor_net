@@ -34,13 +34,13 @@ void nrf_init(byte source_addr)
 
 bool SendRadioMessage(byte dest,char *buffer, int buffer_length)
 {
-  Serial.print("Send:");Serial.print(dest);Serial.print(" ");
+  DEBUG_OUT.print("Send:");DEBUG_OUT.print(dest);DEBUG_OUT.print(" ");
   radio.setAutoAck(dest != 0xff);
   radio.stopListening();
   radio.openWritingPipe(pipe + dest);
   bool return_value = radio.write( buffer, buffer_length );
   radio.startListening();
-  Serial.println(return_value);
+  DEBUG_OUT.println(return_value);
   return return_value;
 }
 
@@ -66,12 +66,12 @@ bool ReceiveRadioMessage(char *buffer, int *buffer_length)
     *buffer_length = len;
     radio.read(buffer,len);
 
-    Serial.write('\n');
+    DEBUG_OUT.write('\n');
 
     for( i = 0; i < len; i++) {
-    Serial.write(' ');
-    Serial.print(buffer[i], HEX);
+    DEBUG_OUT.write(' ');
+    DEBUG_OUT.print(buffer[i], HEX);
     }
-    Serial.write('\n');
+    DEBUG_OUT.write('\n');
   }
 }

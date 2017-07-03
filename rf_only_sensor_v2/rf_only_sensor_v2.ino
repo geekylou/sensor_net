@@ -9,6 +9,8 @@
 #include <RF24.h>
 #include <RF24_config.h>
 
+#define DEBUG_OUT Serial
+
 #include "usb_serial.h"
 #include "libmaple/usb_cdcacm.h"
 
@@ -73,47 +75,45 @@ uint16 config_settings;
 #define PAYLOAD_LENGTH          16
 bool SendRadioMessageRouted(char *buffer, int buffer_length)
 {
-  char count = 0;
+  char count = 0,count_saved=0;
   bool retval = false;
-  byte addr = 0xff;
+  byte addr = 0xff, old_addr = 0xff;
   byte score = 0;
-  Serial.println("SendRadioMessageRouted");
-  for(count = 0; count < MAX_NEIGHBOURS; count++)
-  {
-    if (neighbours[count].score > score && neighbours[count].addr != 0xff)
-    {
-      addr  = neighbours[count].addr;
-      score = neighbours[count].score;
-    }
-  }
-  if (addr != 0xff)
-  {
-    byte old_addr = addr;
+  char retries = 5;
+  
+  DEBUG_OUT.println("SendRadioMessageRouted");
 
-    retval |= SendRadioMessage(addr, &buffer[2], buffer_length - 2);
-    
-    addr = 0xff;
-    score = 0;  
-
+  do {
     for(count = 0; count < MAX_NEIGHBOURS; count++)
     {
       if (neighbours[count].score > score && neighbours[count].addr != 0xff && neighbours[count].addr != old_addr)
       {
-        addr = neighbours[count].addr;
+        addr  = neighbours[count].addr;
         score = neighbours[count].score;
+        count_saved = count;
       }
     }
-
     if (addr != 0xff)
     {
-       retval |= SendRadioMessage(addr, &buffer[2], buffer_length - 2);
+      byte old_addr = addr;
+
+      retval |= SendRadioMessage(addr, &buffer[2], buffer_length - 2);
+      if (!retval) { DEBUG_OUT.print("--score:");DEBUG_OUT.println((int) count_saved);neighbours[ count_saved].score--; }     
     }
-  }
+    old_addr = addr;
+    addr = 0xff;
+    score = 0;
+    retries--;
+    // Add code here for now to send the message to at least the two
+    // best base stations.
+  } while( retries > 0 && !retval );
   return retval;
 }
 
 void setup() {
   char count;
+  Serial.begin(115200);
+  DEBUG_OUT.begin(115200);
   pinMode(18,OUTPUT);
   pinMode(19,OUTPUT);
   pinMode(20,OUTPUT);
@@ -137,12 +137,12 @@ void setup() {
   {
     if (searchSensor(sensor_addr[count]) == 2)
     {
-      Serial.println("break");
+      DEBUG_OUT.println("break");
       
       break;
     }
   }
-  Serial.println((int)count);
+  DEBUG_OUT.println((int)count);
   sensors = count;
   sensor_count = 0;
   startSensorConversion(sensor_addr[0]);
@@ -162,12 +162,12 @@ void setup() {
 
   if(digitalRead(buttons[0].input) != HIGH)
   {
-    Serial.println("EEPROM");
+    DEBUG_OUT.println("EEPROM");
     int Status = EEPROM.init();
-    Serial.println(Status);
+    DEBUG_OUT.println(Status);
     Status = EEPROM.read(0x0, (uint16 *)&source_addr);
-    Serial.println(Status);
-    Serial.print("Address:");Serial.println(source_addr);
+    DEBUG_OUT.println(Status);
+    DEBUG_OUT.print("Address:");DEBUG_OUT.println(source_addr);
   }
 
   nrf_init(source_addr);
@@ -232,7 +232,7 @@ void loop()
     if (sensors > 0)
     {
       present = readTempreture(&temperature,sensor_addr[sensor_count]);
-      Serial.print("Sensor:");Serial.print(present);Serial.println(sensor_count);
+      DEBUG_OUT.print("Sensor:");DEBUG_OUT.print(present);DEBUG_OUT.println(sensor_count);
       if (present >0)
       {
         len = create_payload_int(DEST_ADDRESS,PAYLOAD_TEMP_BASE+(sensor_count *2),temperature);
@@ -253,14 +253,14 @@ void loop()
     
     {
       char count;
-      Serial.print("Neighbor:");
+      DEBUG_OUT.print("Neighbor:");
       bool overflow = false;
       for(count = 0; count < MAX_NEIGHBOURS; count++)
       {
-        Serial.print(neighbours[count].addr);
-        Serial.print(",");
-        Serial.print(neighbours[count].score);
-        Serial.print(" ");
+        DEBUG_OUT.print(neighbours[count].addr);
+        DEBUG_OUT.print(",");
+        DEBUG_OUT.print(neighbours[count].score);
+        DEBUG_OUT.print(" ");
         if (neighbours[count].score > 40)
         {
           overflow = true;
@@ -319,7 +319,7 @@ void loop()
       {
         if ((millis_a - (buttons[button].time) > 50) && (buttons[button].pressed) == 0)
         {
-          Serial.print("Button:");Serial.println(button);
+          DEBUG_OUT.print("Button:");DEBUG_OUT.println(button);
           buttons[button].pressed = 1;
           len = create_payload_int(DEST_ADDRESS,PAYLOAD_BUTTON,button);
           SendRadioMessageRouted((char *)message_payload,len);
@@ -328,6 +328,7 @@ void loop()
       }
     }
   }
+  asm("wfi"); /* Wait for interrupt.  This halts the processor until we get a interrupt.*/
 }
 
 void handle_request(byte *request)
@@ -341,7 +342,7 @@ void handle_request(byte *request)
         char button_no = request[5];
         if(button_no < BUTTONS && buttons[button_no].output != 0xff)
         {
-          //Serial.print("Set LED");Serial.print((int)button_no);Serial.print(",");Serial.println(message_payload[6]);
+          //DEBUG_OUT.print("Set LED");DEBUG_OUT.print((int)button_no);DEBUG_OUT.print(",");DEBUG_OUT.println(message_payload[6]);
           digitalWrite(buttons[button_no].output,request[6]);
         }   
       }
@@ -366,8 +367,8 @@ void handle_mppl()
   int len;
   int temperature;
   int pressure = readPressure() * 10;
-  Serial.print(" Pressure(Pa):");
-  Serial.println(pressure);
+  DEBUG_OUT.print(" Pressure(Pa):");
+  DEBUG_OUT.println(pressure);
   
   memset(message_payload,0,sizeof(message_payload));
   len = create_payload_int(DEST_ADDRESS,PAYLOAD_PRESSURE,pressure);
@@ -375,8 +376,8 @@ void handle_mppl()
   sendFastMode((uint8_t *)message_payload,len);
   
   readTemp(&temperature);
-  Serial.print(" Temp(c):");
-  Serial.println(temperature);
+  DEBUG_OUT.print(" Temp(c):");
+  DEBUG_OUT.println(temperature);
   len = create_payload_int(DEST_ADDRESS,PAYLOAD_TEMP_INTERNAL,temperature);
   SendRadioMessageRouted((char *)message_payload, len);
   sendFastMode((uint8_t *)message_payload,len);
@@ -409,7 +410,7 @@ int sendFastMode(uint8_t *buf,uint8_t size)
     if (millis() - timeout_time > FASTMODE_TIMEOUT)
     {
       resetFastTxCallback();
-      Serial.println("resetFastTxCallback");
+      DEBUG_OUT.println("resetFastTxCallback");
       break;
     }
     delay(1);
@@ -454,7 +455,7 @@ void fastDataRxCb(uint32 ep_rx_size, uint8 *ep_rx_data)
   int x;
   uint32_t count;
   uint16_t *data_buffer = (uint16_t *)ep_rx_data; 
-  Serial.println("fastDataRxCb");
+  DEBUG_OUT.println("fastDataRxCb");
   x = data_buffer[0];
 
   if (x == FAST_BUS_SEND_RADIO_MESSAGE)
