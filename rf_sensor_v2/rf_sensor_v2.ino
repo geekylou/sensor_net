@@ -14,7 +14,8 @@
 #include "usb_serial.h"
 #include "libmaple/usb_cdcacm.h"
 
-#define STATUS_LED     18
+#define ERROR_LED      13
+#define STATUS_LED     12
 
 #define BUTTONS        3
 #define MAX_SENSORS    8
@@ -37,7 +38,7 @@ neighbour neighbours[MAX_NEIGHBOURS];
 button buttons[BUTTONS];
 
 byte message_payload[30];
-long past_millis,past_millis_ident,received_millis;
+long past_millis,past_millis_ident,received_millis,error_millis;
 
 byte sensor_addr[MAX_SENSORS][8];
 byte sensors;
@@ -64,6 +65,7 @@ uint16 config_settings;
 #define PAYLOAD_BUTTON          0x10
 #define PAYLOAD_TEMP_INTERNAL   0x2
 #define PAYLOAD_PRESSURE        0x4
+#define PAYLOAD_LIGHT_INTERNAL  0x6
 
 #define PAYLOAD_PING            0x80
 #define PAYLOAD_SETUP           0x81
@@ -107,6 +109,7 @@ bool SendRadioMessageRouted(char *buffer, int buffer_length)
     // Add code here for now to send the message to at least the two
     // best base stations.
   } while( retries > 0 && !retval );
+  if (!retval) error_millis = millis();
   return retval;
 }
 
@@ -114,11 +117,16 @@ void setup() {
   char count;
   Serial.begin(115200);
   DEBUG_OUT.begin(115200);
-  pinMode(18,OUTPUT);
+
+  pinMode(11, INPUT_ANALOG);
+  
+  pinMode(12,OUTPUT);
+  pinMode(13,OUTPUT);
   pinMode(19,OUTPUT);
   pinMode(20,OUTPUT);
   pinMode(33,OUTPUT);
 
+  digitalWrite(17, 0);
   digitalWrite(18, 0);
   digitalWrite(19, 0);
   digitalWrite(20, 0);
@@ -217,7 +225,18 @@ void loop()
   
   if (source_addr != SETUP_ADDRESS)
   {
-    digitalWrite(STATUS_LED, millis_a - received_millis < 1200 ? (millis_a / 1000) & 0x1 : 0);
+    int led;
+    if (millis_a - error_millis < 1200)
+    {
+      led = ERROR_LED;
+      digitalWrite(STATUS_LED,0);
+    }
+    else
+    {
+      led = STATUS_LED;
+      digitalWrite(ERROR_LED,0);
+    }
+    digitalWrite(led, millis_a - received_millis < 1200 ? (millis_a / 1000) & 0x1 : 0);
   }
   else
   {
@@ -250,6 +269,7 @@ void loop()
     past_millis = millis();
     
     if (mppl_pesent) {handle_mppl();}
+    handle_light();
     
     {
       char count;
@@ -287,6 +307,7 @@ void loop()
     int len,index;
 
     if (mppl_pesent) {handle_mppl_ident();}
+    handle_light_ident();
     
     len = create_payload_description(DEST_ADDRESS,PAYLOAD_BUTTON+1, PAYLOAD_TYPE_ASCII,"Button");
     sendFastMode((uint8_t *)message_payload, len);
@@ -360,6 +381,45 @@ void handle_request(byte *request)
       break;
     }
   }
+}
+
+void handle_light_ident()
+{
+  int len;
+  len = create_payload_description(DEST_ADDRESS,PAYLOAD_LIGHT_INTERNAL+1, PAYLOAD_TYPE_ASCII,"Light");
+  sendFastMode((uint8_t *)message_payload, len);
+  SendRadioMessageRouted((char *)message_payload, len);
+
+  len = create_payload_description(DEST_ADDRESS,PAYLOAD_LIGHT_INTERNAL+3, PAYLOAD_TYPE_ASCII,"Light");
+  sendFastMode((uint8_t *)message_payload, len);
+  SendRadioMessageRouted((char *)message_payload, len);
+}
+
+void handle_light()
+{
+  int len;
+  int temperature;
+  int light = analogRead(11);
+  
+  DEBUG_OUT.print(" Light:");
+  DEBUG_OUT.println(light);
+  
+  memset(message_payload,0,sizeof(message_payload));
+  len = create_payload_int(DEST_ADDRESS,PAYLOAD_LIGHT_INTERNAL,light);
+  SendRadioMessageRouted((char *)message_payload, len);
+  sendFastMode((uint8_t *)message_payload,len);
+  
+  pinMode(10,OUTPUT);digitalWrite(10,HIGH);
+  //delay(50);
+
+  light = analogRead(11);
+  memset(message_payload,0,sizeof(message_payload));
+  len = create_payload_int(DEST_ADDRESS,PAYLOAD_LIGHT_INTERNAL+2,light);
+  SendRadioMessageRouted((char *)message_payload, len);
+  sendFastMode((uint8_t *)message_payload,len);
+  
+  pinMode(10, INPUT);
+  //delay(50);
 }
 
 void handle_mppl()
