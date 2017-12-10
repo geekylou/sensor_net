@@ -108,7 +108,7 @@ bool RFM69::initialize(uint8_t freqBand, uint8_t nodeID, uint8_t networkID)
   end = start + MS2ST(50);
   
   while (((readReg(REG_IRQFLAGS1) & RF_IRQFLAGS1_MODEREADY) == 0x00) && chVTIsSystemTimeWithin(start, end)); // wait for ModeReady
-  if (chVTIsSystemTimeWithin(start, end))
+  if (!chVTIsSystemTimeWithin(start, end))
     return false;
   _inISR = false;
   
@@ -173,7 +173,6 @@ void RFM69::setMode(uint8_t newMode)
   // we are using packet mode, so this check is not really needed
   // but waiting for mode ready is necessary when going from sleep because the FIFO may not be immediately available from previous mode
   while (_mode == RF69_MODE_SLEEP && (readReg(REG_IRQFLAGS1) & RF_IRQFLAGS1_MODEREADY) == 0x00); // wait for ModeReady
-
   _mode = newMode;
 }
 
@@ -243,6 +242,8 @@ bool RFM69::sendWithRetry(uint8_t toAddress, const void* buffer, uint8_t bufferS
 	systime_t end = start + MS2ST(retryWaitTime);
     while (chVTIsSystemTimeWithin(start, end))
     {
+	  //chThdSleepMilliseconds(1);
+	  interruptHandler();
       if (ACKReceived(toAddress))
       {
         //Serial.print(" ~ms:"); Serial.print(millis() - sentTime);
@@ -315,17 +316,20 @@ void RFM69::sendFrame(uint8_t toAddress, const void* buffer, uint8_t bufferSize,
   setMode(RF69_MODE_STANDBY);
 }
 
+
 // internal function - interrupt gets called when a packet is received
 void RFM69::interruptHandler() {
+  //palSetPad(GPIOB, 1);
+//chprintf((BaseSequentialStream *)&SD2,"7\r\n");
   //pinMode(4, OUTPUT);
   //digitalWrite(4, 1);
   if (_mode == RF69_MODE_RX && (readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY))
   {
 	uint8_t data;
+	
     //RSSI = readRSSI();
     setMode(RF69_MODE_STANDBY);
     select();
-	
 	data = REG_FIFO & 0x7F;
 	spiSend(_spi, 1, &data);
     spiReceive(_spi, 1, (void *)&PAYLOADLEN);
@@ -337,11 +341,12 @@ void RFM69::interruptHandler() {
     {
       PAYLOADLEN = 0;
       unselect();
+	  chprintf((BaseSequentialStream *)&SD2,"5\r\n");
       receiveBegin();
       //digitalWrite(4, 0);
       return;
     }
-
+	chprintf((BaseSequentialStream *)&SD2,"6 %d\r\n",PAYLOADLEN);
     DATALEN = PAYLOADLEN - 3;
 	spiReceive(_spi, 1, (void *)&SENDERID);
     uint8_t CTLbyte;
@@ -350,9 +355,9 @@ void RFM69::interruptHandler() {
     ACK_RECEIVED = CTLbyte & RFM69_CTL_SENDACK; // extract ACK-received flag
     ACK_REQUESTED = CTLbyte & RFM69_CTL_REQACK; // extract ACK-requested flag
     
-    interruptHook(CTLbyte);     // TWS: hook to derived class interrupt function
+    //interruptHook(CTLbyte);     // TWS: hook to derived class interrupt function
 
-	spiReceive(_spi, DATALEN, &data);
+	spiReceive(_spi, DATALEN, (void *)DATA);
 	
     if (DATALEN < RF69_MAX_DATA_LEN) DATA[DATALEN] = 0; // add null at end of string
     unselect();
@@ -360,6 +365,7 @@ void RFM69::interruptHandler() {
   }
   RSSI = readRSSI();
   //digitalWrite(4, 0);
+  
 }
 
 // internal function

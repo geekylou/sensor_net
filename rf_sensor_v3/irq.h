@@ -18,9 +18,24 @@ class IRQWrapper
 		_channel = channel;
 	}
 	
-
-		bool inline Get()
-		{
-			return palReadPad(_port,_pad);
-		}
+	void inline Disable()
+	{
+	}
+	
+	void inline Enable()
+	{
+	}
+	
+	void inline Lock()
+	{
+	}
+	
+	void inline Unlock()
+	{
+	}
+	
+	bool inline Get()
+	{
+		return palReadPad(_port,_pad);
+	}
 };

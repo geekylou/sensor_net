@@ -28,6 +28,10 @@
 
 #include "ch.h"
 #include "hal.h"
+
+#include "shell.h"
+#include "chprintf.h"
+
 #include "irq.h"
 
 #define RF69_MAX_DATA_LEN       61 // to take advantage of the built in AES/CRC we want to limit the frame size to the internal FIFO size (66 bytes - 3 bytes overhead - 2 bytes crc)
@@ -107,9 +111,8 @@ class RFM69 {
     //void readAllRegs();
     //void readAllRegsCompact();
     void virtual interruptHandler();
-	
+	void isr0();
   protected:
-    static void isr0();
     virtual void interruptHook(uint8_t CTLbyte) {};
     static volatile bool _inISR;
     virtual void sendFrame(uint8_t toAddress, const void* buffer, uint8_t size, bool requestACK=false, bool sendACK=false);

@@ -15,6 +15,7 @@
 */
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "ch.h"
 #include "hal.h"
@@ -23,10 +24,26 @@
 #include "fast_bus.h"
 #include "usbcfg.h"
 #include "chprintf.h"
+#include "chbsem.h"
 #include "RFM69.h"
 
 #define SHELL_WA_SIZE   THD_WORKING_AREA_SIZE(2048)
 #define USB_PA12_DISCONNECT 1
+
+#define GATEWAY_ID    1
+#define NODE_ID       9    // node ID
+#define NETWORKID     101    //the same on all nodes that talk to each other
+#define MSG_INTERVAL  100
+
+// Uncomment only one of the following three to match radio frequency
+//#define FREQUENCY     RF69_433MHZ    
+#define FREQUENCY     RF69_868MHZ
+//#define FREQUENCY     RF69_915MHZ
+
+#define IS_RFM69HW   //NOTE: uncomment this ONLY for RFM69HW or RFM69HCW
+#define ENCRYPT_KEY    "EncryptKey123456"  // use same 16byte encryption key for all devices on net
+
+#define MSGBUFSIZE 128
 
 /*
  * Low speed SPI configuration (281.250kHz, CPHA=0, CPOL=0, MSb first).
@@ -41,6 +58,7 @@ static const SPIConfig ls_spicfg = {
 
 IRQWrapper irq = IRQWrapper(GPIOB, 0, 0); /* GPIOB0 ext channel 0 */
 RFM69 radio = RFM69(&SPID1, &ls_spicfg, &irq, true);
+static thread_reference_t trp = NULL;
 
 /* Can be measured using dd if=/dev/xxxx of=/dev/null bs=512 count=10000.*/
 static void cmd_date(BaseSequentialStream *chp, int argc, char *argv[]) {
@@ -63,7 +81,8 @@ static void cmd_date(BaseSequentialStream *chp, int argc, char *argv[]) {
     rtcConvertDateTimeToStructTm(&timespec, &tim, NULL);
   }
   chprintf(chp,"\nDate: %2d:%02d:%02d\n",tim.tm_hour,tim.tm_min,tim.tm_sec); 
-
+  
+  chprintf((BaseSequentialStream *)&SDU1,"%d\r\n",irq.Get());
   chprintf(chp, "\r\n\nback to shell! %d\r\n",radio.readTemperature(0));
 }
 
@@ -142,7 +161,10 @@ static void extcb1(EXTDriver *extp, expchannel_t channel) {
 
   (void)extp;
   (void)channel;
-  palSetPad(GPIOA, 4);
+  
+  chSysLockFromISR();
+  chThdResumeI(&trp, (msg_t)0x1337);  /* Resuming the thread with message.*/
+  chSysUnlockFromISR();
 }
 
 static const EXTConfig extcfg = {
@@ -170,16 +192,94 @@ static const EXTConfig extcfg = {
  * This is a periodic thread that does absolutely nothing except flashing
  * a LED.
  */
-static THD_WORKING_AREA(waThread1, 128);
+/*static THD_WORKING_AREA(waInterruptThread, 1024);
+static THD_FUNCTION(InterruptThread, arg) {
+
+	(void)arg;
+	chRegSetThreadName("interrupt");
+	while(1)
+	{
+		//palSetPad(GPIOB, 1);
+		//chprintf((BaseSequentialStream *)&SDU1,"IRQ received\r\n");
+		while(irq.Get()) radio.interruptHandler();
+		chSysLock();
+		chThdSuspendS(&trp);
+		chSysUnlock();
+	}
+}*/
+
+/*
+ * This is a periodic thread that does absolutely nothing except flashing
+ * a LED.
+ */
+static THD_WORKING_AREA(waThread1, 4096);
 static THD_FUNCTION(Thread1, arg) {
 
   (void)arg;
+  int x=0;
+  int i=0;
   chRegSetThreadName("blinker");
-  while (true) {
-    palSetPad(GPIOC, 13);       /* Orange.  */
-    chThdSleepMilliseconds(500);
-    palClearPad(GPIOC, 13);     /* Orange.  */
-    chThdSleepMilliseconds(500);
+  extChannelEnable(&EXTD1, 0);
+  chprintf((BaseSequentialStream *)&SD2,"blinker\r\n");
+  bool sleep = false;
+  while (true) 
+  {
+	uint8_t theNodeID;
+	char msgBuf[MSGBUFSIZE];
+	/*
+	sprintf((char*)msgBuf,"M %d\r\n",x++);
+	if(radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,strlen(msgBuf),true))
+	{
+		chprintf((BaseSequentialStream *)&SDU1,"ACK received\r\n");
+	}
+	else chprintf((BaseSequentialStream *)&SDU1,"no Ack!\r\n");*/
+	
+	if(irq.Get()) 
+	{
+		chprintf((BaseSequentialStream *)&SD2,"4\r\n");
+		radio.isr0();
+		sleep = false;
+	}
+	else
+	{
+		sleep = true;
+	}
+	//chprintf((BaseSequentialStream *)&SD2,"1\r\n");
+	palSetPad(GPIOC, 13);       /* Orange.  */
+	if(radio.receiveDone()) 
+	{
+		int index;
+		chprintf((BaseSequentialStream *)&SD2,"3\r\n");
+		chprintf((BaseSequentialStream *)&SD2,"%d:Received from TNODE: %d ",i++,radio.SENDERID);
+		//pc.printf((char*)radio.DATA);
+		for (index=0; index<radio.DATALEN; index++)
+		{
+			chprintf((BaseSequentialStream *)&SD2,"%x,",radio.DATA[index]);
+		}
+		chprintf((BaseSequentialStream *)&SD2,"\r\n");
+		
+		if (radio.ACKRequested()){
+			theNodeID = radio.SENDERID;
+			radio.sendACK((void *)&radio.RSSI,sizeof(radio.RSSI));
+			chprintf((BaseSequentialStream *)&SD2," - ACK sent. Receive RSSI: %d\r\n",radio.RSSI);
+		} else chprintf((BaseSequentialStream *)&SD2,"Receive RSSI: %d\r\n",radio.RSSI);
+	}
+	//chprintf((BaseSequentialStream *)&SD2,"2\r\n");
+	
+	if(sleep)
+	{
+		palClearPad(GPIOC, 13);     /* Orange.  */
+		chSysLock();
+		chprintf((BaseSequentialStream *)&SD2,"%x,",chThdSuspendTimeoutS(&trp,10000));
+		chSysUnlock();
+	}
+	
+	
+	
+    //palSetPad(GPIOC, 13);       /* Orange.  */
+    //chThdSleepMilliseconds(10);
+    //palClearPad(GPIOC, 13);     /* Orange.  */
+    //chThdSleepMilliseconds(500);
   }
 }
 
@@ -228,7 +328,7 @@ int main(void) {
   palSetPadMode(GPIOA, 6, PAL_MODE_STM32_ALTERNATE_PUSHPULL);     /* MISO.*/
   palSetPadMode(GPIOA, 7, PAL_MODE_STM32_ALTERNATE_PUSHPULL);     /* MOSI.*/
   palSetPadMode(GPIOA, 4, PAL_MODE_OUTPUT_PUSHPULL); /* NSS */
-  palSetPadMode(GPIOB, 0, PAL_MODE_INPUT_PULLDOWN);
+  palSetPadMode(GPIOB, 0, PAL_MODE_INPUT_PULLDOWN); // IRQ
   palClearPad(GPIOA, 4);
   
   i2cStart(&I2CD1, &i2cfg1);
@@ -237,7 +337,7 @@ int main(void) {
    */
   sduObjectInit(&SDU1);
   sduStart(&SDU1, &serusbcfg);
-  
+  extStart(&EXTD1, &extcfg);
   /*
    * Activates the USB driver and then the USB bus pull-up on D+.
    * Note, a delay is inserted in order to not have to disconnect the cable
@@ -257,22 +357,36 @@ int main(void) {
    * Activates the serial driver 2 using the driver default configuration.
    * PA2(TX) and PA3(RX) are routed to USART2.
    */
-  //sdStart(&SD2, NULL);
-  //palSetPadMode(GPIOA, 2, PAL_MODE_ALTERNATE(7));
-  //palSetPadMode(GPIOA, 3, PAL_MODE_ALTERNATE(7));
+  sdStart(&SD2, NULL);
+  palSetPadMode(GPIOA, 2, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
+  palSetPadMode(GPIOA, 3, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
   palSetPadMode(GPIOC, 13, PAL_MODE_OUTPUT_PUSHPULL);
-  /*
-   * Creates the example thread.
-   */
-  chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO, Thread1, NULL);
   
+  //setSourceAddress(NODE_ID);
+  if(radio.initialize(FREQUENCY, NODE_ID, NETWORKID))
+  {
+	radio.encrypt(0);
+	radio.setPowerLevel(10);
+	radio.promiscuous(true);
+	//#ifdef IS_RFM69HW
+	radio.setHighPower(); //uncomment #define ONLY if radio is of type: RFM69HW or RFM69HCW 
+	//#endif
+
+	/*
+	* Creates the example thread.
+	*/
+	//chThdCreateStatic(waInterruptThread, sizeof(waInterruptThread), NORMALPRIO, InterruptThread, NULL);
+	chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO, Thread1, NULL);  
+  }
+  else
+  {
+	  chprintf((BaseSequentialStream *)&SD2,"couldn't init radio\r\n");
+  }
   /*
    * Shell manager initialization.
    */
   shellInit();
-  
-  extStart(&EXTD1, &extcfg);
-  extChannelEnable(&EXTD1, 0);
+
   /*
    * Normal main() thread activity, in this demo it does nothing except
    * sleeping in a loop and check the button state.
