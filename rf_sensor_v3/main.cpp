@@ -31,6 +31,8 @@
 
 #define MSGBUFSIZE 128
 
+int *serial_no = (int *)0x0801FC00;
+
 /*
  * Low speed SPI configuration (281.250kHz, CPHA=0, CPOL=0, MSb first).
  */
@@ -64,8 +66,8 @@ static void cmd_date(BaseSequentialStream *chp, int argc, char *argv[]) {
     rtcGetTime(&RTCD1, &timespec);
     rtcConvertDateTimeToStructTm(&timespec, &tim, NULL);
   }
-  chprintf(chp,"\nDate: %2d:%02d:%02d\n",tim.tm_hour,tim.tm_min,tim.tm_sec); 
-  
+  chprintf(chp,"\nDate: %2d:%02d:%02d\r\n",tim.tm_hour,tim.tm_min,tim.tm_sec); 
+  chprintf(chp,"UUID: %x %x %x %x\r\n",serial_no[0],serial_no[1],serial_no[1],serial_no[3]);
   chprintf((BaseSequentialStream *)&SDU1,"%d\r\n",irq.Get());
   chprintf(chp, "\r\n\nback to shell! %d\r\n",radio.readTemperature(0));
 }
