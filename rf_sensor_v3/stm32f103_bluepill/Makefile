@@ -86,10 +86,10 @@ endif
 #
 
 # Define project name here
-PROJECT = ch
+PROJECT = sensor_node_v3
 
 # Imported source files and paths
-CHIBIOS = ../../ChibiOS_17.6.3/
+CHIBIOS = ../../../ChibiOS_17.6.3/
 # Startup files.
 include $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_stm32f1xx.mk
 # HAL-OSAL files (optional).
@@ -101,7 +101,6 @@ include $(CHIBIOS)/os/hal/osal/rt/osal.mk
 include $(CHIBIOS)/os/rt/rt.mk
 include $(CHIBIOS)/os/common/ports/ARMCMx/compilers/GCC/mk/port_v7m.mk
 # Other files (optional).
-#include $(CHIBIOS)/test/rt/test.mk
 include $(CHIBIOS)/os/hal/lib/streams/streams.mk
 include $(CHIBIOS)/os/various/shell/shell.mk
 
@@ -127,13 +126,13 @@ CSRC = $(STARTUPSRC) \
        
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
-CPPSRC = main.cpp \
-         usbcfg.cpp \
-         fast_bus.cpp \
-         mppl3115a2.cpp \
-		 RFM69.cpp \
-		 syscalls_cpp.cpp \
-		 stm32f103_bluepill/board_specific.cpp
+CPPSRC = ../main.cpp \
+         ../usbcfg.cpp \
+         ../fast_bus.cpp \
+         ../mppl3115a2.cpp \
+		 ../RFM69.cpp \
+		 ../syscalls_cpp.cpp \
+		 board_specific.cpp
 		 
 # C sources to be compiled in ARM mode regardless of the global setting.
 # NOTE: Mixing ARM and THUMB mode enables the -mthumb-interwork compiler
@@ -163,7 +162,9 @@ INCDIR = $(CHIBIOS)/os/license \
          $(STARTUPINC) $(KERNINC) $(PORTINC) $(OSALINC) \
          $(HALINC) $(PLATFORMINC) $(BOARDINC) \
          $(STREAMSINC) $(SHELLINC) \
-         $(CHIBIOS)/os/various
+         $(CHIBIOS)/os/various \
+		 ../
+		
 
 #
 # Project, sources and paths
