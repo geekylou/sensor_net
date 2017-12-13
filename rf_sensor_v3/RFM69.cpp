@@ -277,7 +277,7 @@ void RFM69::sendACK(const void* buffer, uint8_t bufferSize) {
   systime_t start = chVTGetSystemTime();
   systime_t end = start + MS2ST(RF69_CSMA_LIMIT_MS);
   
-  while (!canSend() && chVTIsSystemTimeWithin(start, end)) receiveDone();
+  while (!canSend() && chVTIsSystemTimeWithin(start, end)) {receiveDone();}
   SENDERID = sender;    // TWS: Restore SenderID after it gets wiped out by receiveDone()
   sendFrame(sender, buffer, bufferSize, false, true);
   RSSI = _RSSI; // restore payload RSSI
@@ -320,7 +320,6 @@ void RFM69::sendFrame(uint8_t toAddress, const void* buffer, uint8_t bufferSize,
 // internal function - interrupt gets called when a packet is received
 void RFM69::interruptHandler() {
   //palSetPad(GPIOB, 1);
-//chprintf((BaseSequentialStream *)&SD2,"7\r\n");
   //pinMode(4, OUTPUT);
   //digitalWrite(4, 1);
   if (_mode == RF69_MODE_RX && (readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY))
@@ -341,12 +340,10 @@ void RFM69::interruptHandler() {
     {
       PAYLOADLEN = 0;
       unselect();
-	  chprintf((BaseSequentialStream *)&SD2,"5\r\n");
       receiveBegin();
       //digitalWrite(4, 0);
       return;
     }
-	chprintf((BaseSequentialStream *)&SD2,"6 %d\r\n",PAYLOADLEN);
     DATALEN = PAYLOADLEN - 3;
 	spiReceive(_spi, 1, (void *)&SENDERID);
     uint8_t CTLbyte;
@@ -390,7 +387,8 @@ void RFM69::receiveBegin() {
 bool RFM69::receiveDone() {
 //ATOMIC_BLOCK(ATOMIC_FORCEON)
 //{
-  extChannelDisable(&EXTD1, _interruptChannel->_channel); // re-enabled in unselect() via setMode() or via receiveBegin()
+  interruptHandler();
+  //extChannelDisable(&EXTD1, _interruptChannel->_channel); // re-enabled in unselect() via setMode() or via receiveBegin()
   if (_mode == RF69_MODE_RX && PAYLOADLEN > 0)
   {
     setMode(RF69_MODE_STANDBY); // enables interrupts
@@ -398,7 +396,7 @@ bool RFM69::receiveDone() {
   }
   else if (_mode == RF69_MODE_RX) // already in RX no payload yet
   {
-    extChannelEnable(&EXTD1, _interruptChannel->_channel); // explicitly re-enable interrupts
+    //extChannelEnable(&EXTD1, _interruptChannel->_channel); // explicitly re-enable interrupts
     return false;
   }
   receiveBegin();
@@ -463,7 +461,7 @@ void RFM69::writeReg(uint8_t addr, uint8_t value)
 
 // select the RFM69 transceiver (save SPI settings, set CS low)
 void RFM69::select() {
-  extChannelDisable(&EXTD1, _interruptChannel->_channel);
+  //extChannelDisable(&EXTD1, _interruptChannel->_channel);
 
   spiAcquireBus(_spi);
   spiStart(_spi, _spicfg);
@@ -523,7 +521,7 @@ void RFM69::rcCalibration()
 inline void RFM69::maybeInterrupts()
 {
   // Only reenable interrupts if we're not being called from the ISR
-  if (!_inISR) extChannelEnable(&EXTD1, _interruptChannel->_channel);
+  //if (!_inISR) extChannelEnable(&EXTD1, _interruptChannel->_channel);
 }
 
 

@@ -318,7 +318,7 @@ static const USBEndpointConfig ep2config = {
 
 static void ep4out_handler(USBDriver *usbp, usbep_t ep)
 {
-    FastBus1.received();    
+    FastBus1.received();
 }
 
 static void ep4in_handler(USBDriver *usbp, usbep_t ep)

@@ -197,7 +197,7 @@ bool USBFastBus::start_receive()
   }
 
   /* Checking if there is already a transaction ongoing on the endpoint.*/
-  if (usbGetReceiveStatusI(usbp, this->bulk_in)) 
+  if (usbGetReceiveStatusI(usbp, this->bulk_out)) 
   {
     return true;
   }
@@ -237,7 +237,8 @@ void USBFastBus::obnotify(io_buffers_queue_t *bqp)
     /* Trying to get a full buffer.*/
     uint8_t *buf = obqGetFullBufferI(&inst->obqueue, &n);
     
-    if (buf != NULL) {
+    if (buf != NULL) 
+	{
       /* Buffer found, starting a new transaction.*/
       usbStartTransmitI(inst->usbp, inst->bulk_in, buf, n);
     }

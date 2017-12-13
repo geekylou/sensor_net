@@ -132,8 +132,9 @@ CPPSRC = main.cpp \
          fast_bus.cpp \
          mppl3115a2.cpp \
 		 RFM69.cpp \
-		 syscalls_cpp.cpp
-
+		 syscalls_cpp.cpp \
+		 stm32f103_bluepill/board_specific.cpp
+		 
 # C sources to be compiled in ARM mode regardless of the global setting.
 # NOTE: Mixing ARM and THUMB mode enables the -mthumb-interwork compiler
 #       option that results in lower performance and larger code size.
