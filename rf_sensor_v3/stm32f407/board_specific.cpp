@@ -75,15 +75,15 @@ static const I2CConfig i2cfg1 = {
 void board_init()
 {
 	/* This is never done in the testhal code for I2C but appears to be critical to correct operation. */
-	palSetPadMode(GPIOB, 10, PAL_MODE_ALTERNATE(1));
-	palSetPadMode(GPIOB, 11, PAL_MODE_ALTERNATE(1));
+	palSetPadMode(GPIOB, 10, PAL_MODE_ALTERNATE(4));
+	palSetPadMode(GPIOB, 11, PAL_MODE_ALTERNATE(4));
 
 	/*
 	* SPI1 I/O pins setup.
 	*/
-	palSetPadMode(GPIOA, 5, PAL_MODE_ALTERNATE(1));     /* SCK. */
-	palSetPadMode(GPIOA, 6, PAL_MODE_ALTERNATE(1));     /* MISO.*/
-	palSetPadMode(GPIOA, 7, PAL_MODE_ALTERNATE(1));     /* MOSI.*/
+	palSetPadMode(GPIOA, 5, PAL_MODE_ALTERNATE(5));     /* SCK. */
+	palSetPadMode(GPIOA, 6, PAL_MODE_ALTERNATE(5));     /* MISO.*/
+	palSetPadMode(GPIOA, 7, PAL_MODE_ALTERNATE(5));     /* MOSI.*/
 	palSetPadMode(GPIOA, 4, PAL_MODE_OUTPUT_PUSHPULL); /* NSS */
 	palSetPadMode(GPIOB, 0, PAL_MODE_INPUT_PULLDOWN); // IRQ
 	palClearPad(GPIOA, 4);
@@ -117,9 +117,10 @@ void board_init()
 	SerialConfig conf;
 	conf.speed = 115200;
 	sdStart(&SD2, &conf);
-	palSetPadMode(GPIOA, 2, PAL_MODE_ALTERNATE(1));
-	palSetPadMode(GPIOA, 3, PAL_MODE_ALTERNATE(1));
-	palSetPadMode(GPIOA, 6, PAL_MODE_OUTPUT_PUSHPULL);
+	palSetPadMode(GPIOA, 2, PAL_MODE_ALTERNATE(7));
+	palSetPadMode(GPIOA, 3, PAL_MODE_ALTERNATE(7));
+	palSetPadMode(LED1_PORT, LED1_PAD, PAL_MODE_OUTPUT_PUSHPULL);
+	palSetPadMode(LED1_PORT, 7, PAL_MODE_OUTPUT_PUSHPULL);
 }
 
 

@@ -22,6 +22,8 @@
 #include "hal.h"
 #include "chprintf.h"
 
+#include "board_specific.h"
+
 #define MPL3115A2_TIMEOUT 10
 
 #define STATUS     0x00
@@ -127,10 +129,10 @@ int readAltitude()
   
   i2c_tx_data[0] = OUT_P_MSB;
   /* sending */
-  i2cAcquireBus(&I2CD1);
-  status = i2cMasterTransmitTimeout(&I2CD1, MPL3115A2_ADDRESS,
+  i2cAcquireBus(&SENSOR_I2C);
+  status = i2cMasterTransmitTimeout(&SENSOR_I2C, MPL3115A2_ADDRESS,
                           i2c_tx_data, 1, i2c_rx_data, 3, MPL3115A2_TIMEOUT);
-  i2cReleaseBus(&I2CD1);
+  i2cReleaseBus(&SENSOR_I2C);
   
   msb = i2c_rx_data[0];
   csb = i2c_rx_data[1];
@@ -182,10 +184,10 @@ int readPressure()
   
   i2c_tx_data[0] = OUT_P_MSB;
   /* sending */
-  i2cAcquireBus(&I2CD1);
-  status = i2cMasterTransmitTimeout(&I2CD1, MPL3115A2_ADDRESS,
+  i2cAcquireBus(&SENSOR_I2C);
+  status = i2cMasterTransmitTimeout(&SENSOR_I2C, MPL3115A2_ADDRESS,
                           i2c_tx_data, 1, i2c_rx_data, 3, MPL3115A2_TIMEOUT);
-  i2cReleaseBus(&I2CD1);
+  i2cReleaseBus(&SENSOR_I2C);
   
   msb = i2c_rx_data[0];
   csb = i2c_rx_data[1];
@@ -227,10 +229,10 @@ int readTemp(int *temperature)
   
   i2c_tx_data[0] = OUT_T_MSB;
   /* sending */
-  i2cAcquireBus(&I2CD1);
-  status = i2cMasterTransmitTimeout(&I2CD1, MPL3115A2_ADDRESS,
+  i2cAcquireBus(&SENSOR_I2C);
+  status = i2cMasterTransmitTimeout(&SENSOR_I2C, MPL3115A2_ADDRESS,
                           i2c_tx_data, 1, i2c_rx_data, 2, MPL3115A2_TIMEOUT);
-  i2cReleaseBus(&I2CD1);
+  i2cReleaseBus(&SENSOR_I2C);
   
   msb = i2c_rx_data[0];
   lsb = i2c_rx_data[1];
@@ -343,10 +345,10 @@ uint8_t IIC_Read(uint8_t regAddr)
   i2c_tx_data[0] = regAddr;
   
   /* sending */
-  i2cAcquireBus(&I2CD1);
-  status = i2cMasterTransmitTimeout(&I2CD1, MPL3115A2_ADDRESS,
+  i2cAcquireBus(&SENSOR_I2C);
+  status = i2cMasterTransmitTimeout(&SENSOR_I2C, MPL3115A2_ADDRESS,
                           i2c_tx_data, 1, i2c_rx_data, 2, MPL3115A2_TIMEOUT);
-  i2cReleaseBus(&I2CD1);
+  i2cReleaseBus(&SENSOR_I2C);
   
   if (status == 0)
     return i2c_rx_data[0];
@@ -363,9 +365,9 @@ msg_t IIC_Write(uint8_t regAddr, uint8_t value)
   i2c_tx_data[1] = value;
   
   /* sending */
-  i2cAcquireBus(&I2CD1);
-  status = i2cMasterTransmitTimeout(&I2CD1, MPL3115A2_ADDRESS,
+  i2cAcquireBus(&SENSOR_I2C);
+  status = i2cMasterTransmitTimeout(&SENSOR_I2C, MPL3115A2_ADDRESS,
                           i2c_tx_data, 2, NULL, 0, MPL3115A2_TIMEOUT);
-  i2cReleaseBus(&I2CD1);
+  i2cReleaseBus(&SENSOR_I2C);
   return status;
 }

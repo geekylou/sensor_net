@@ -4,6 +4,7 @@
 
 #include "fast_bus.h"
 #include <string.h>
+#include "hal.h"
 
 USBFastBus::USBFastBus(USBDriver *usbp, usbep_t bulk_in, usbep_t bulk_out)
 {
@@ -11,10 +12,10 @@ USBFastBus::USBFastBus(USBDriver *usbp, usbep_t bulk_in, usbep_t bulk_out)
     this->bulk_in  = bulk_in;
     this->bulk_out = bulk_out;
     
-    ibqObjectInit(&ibqueue, true, ib,
+    ibqObjectInit(&ibqueue, false, ib,
                     SERIAL_USB_BUFFERS_SIZE, SERIAL_USB_BUFFERS_NUMBER,
                     ibnotify, this);
-    obqObjectInit(&obqueue, true, ob,
+    obqObjectInit(&obqueue, false, ob,
                     SERIAL_USB_BUFFERS_SIZE, SERIAL_USB_BUFFERS_NUMBER,
                     obnotify, this);
 }
@@ -36,7 +37,9 @@ size_t USBFastBus::Read(uint8_t *bp,
                          size_t 	    n,
                          systime_t 	    timeout)
 {
-    size_t retval = ReadBufferTimeout(&ibqueue, bp, n, timeout);
+    //size_t retval = ibqReadTimeout(&ibqueue, bp, n, timeout);
+	
+	size_t retval = ReadBufferTimeout(&ibqueue, bp, n, timeout);
     return retval;
 }
 
@@ -75,7 +78,7 @@ size_t USBFastBus::ReadBufferTimeout(input_buffers_queue_t *ibqp, uint8_t *bp,
     /* Time window for the whole operation.*/
     deadline = osalOsGetSystemTimeX() + timeout;
 
-    msg_t msg;
+    volatile msg_t msg;
 
     /* TIME_INFINITE and TIME_IMMEDIATE are handled differently, no
      deadline.*/
@@ -101,6 +104,10 @@ size_t USBFastBus::ReadBufferTimeout(input_buffers_queue_t *ibqp, uint8_t *bp,
     /* Anything except MSG_OK interrupts the operation.*/
     if (msg != MSG_OK) 
     {
+		if (msg == MSG_RESET)
+		{
+			palClearPad(GPIOA, 7);
+		}
         osalSysUnlock();
         return r;
     }
@@ -175,7 +182,7 @@ void USBFastBus::transmitted()
 void USBFastBus::received()
 {
     osalSysLockFromISR();
-    
+    palSetPad(GPIOA, 7);
     /* Posting the filled buffer in the queue.*/
     ibqPostFullBufferI(&ibqueue, usbGetReceiveTransactionSizeX(usbp,this->bulk_out));
     

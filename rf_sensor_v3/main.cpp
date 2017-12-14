@@ -14,35 +14,10 @@
 #include "board_specific.h"
 
 #define SHELL_WA_SIZE   THD_WORKING_AREA_SIZE(2048)
-#define USB_PA12_DISCONNECT 1
-
-#define GATEWAY_ID    1
-#define NODE_ID       1    // node ID if this isn't what the sending node expects then ACKs won't work!
-#define NETWORKID     101    //the same on all nodes that talk to each other
-#define MSG_INTERVAL  100
-
-// Uncomment only one of the following three to match radio frequency
-//#define FREQUENCY     RF69_433MHZ    
-#define FREQUENCY     RF69_868MHZ
-//#define FREQUENCY     RF69_915MHZ
-
-#define IS_RFM69HW   //NOTE: uncomment this ONLY for RFM69HW or RFM69HCW
-#define ENCRYPT_KEY    "EncryptKey123456"  // use same 16byte encryption key for all devices on net
 
 #define MSGBUFSIZE 128
 
 int *serial_no = (int *)0x0801FC00;
-
-/*
- * Low speed SPI configuration (281.250kHz, CPHA=0, CPOL=0, MSb first).
- */
-static const SPIConfig ls_spicfg = {
-  NULL,
-  GPIOA,
-  4,
-  SPI_CR1_BR_2 | SPI_CR1_BR_1,
-  0
-};
 
 static thread_reference_t trp = NULL;
 
@@ -78,7 +53,7 @@ static void cmd_write(BaseSequentialStream *chp, int argc, char *argv[])
   chprintf(chp, "\r\n\nAttempting to write to fast bus\r\n");
   char msg[64] = "hello world";
   
-  FastBus1.Write((uint8_t *)msg, strlen(msg), 1000);
+  FastBus1.Write((uint8_t *)msg, strlen(msg), 10000);
   
   chprintf(chp, "\r\n\nback to shell!\r\n");
 }
@@ -93,7 +68,7 @@ static void cmd_read(BaseSequentialStream *chp, int argc, char *argv[])
   
   size_t retval;
   
-  retval = FastBus1.Read((uint8_t *)msg, sizeof(msg), 1000);
+  retval = FastBus1.Read((uint8_t *)msg, sizeof(msg), 10000);
   
   chprintf(chp, "\r\n\nback to shell! (%d) %s\r\n",retval,msg);
 }
