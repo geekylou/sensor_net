@@ -186,7 +186,7 @@ void USBFastBus::transmitted()
     {
         /* The endpoint cannot be busy, we are in the context of the callback,
            so it is safe to transmit without a check.*/
-        usbStartTransmitI(usbp, this->bulk_in, buf, n);
+        usbStartTransmitI(this->usbp, this->bulk_in, buf, n);
     }
     
     osalSysUnlockFromISR();

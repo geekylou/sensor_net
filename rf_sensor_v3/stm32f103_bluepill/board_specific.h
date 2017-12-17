@@ -2,8 +2,10 @@
 
 #define USB_PA12_DISCONNECT 1
 
+//#define GATEWAY_DEVICE
+
 #define GATEWAY_ID    1
-#define NODE_ID       1    // node ID if this isn't what the sending node expects then ACKs won't work!
+#define NODE_ID       0xf0    // node ID if this isn't what the sending node expects then ACKs won't work!
 #define NETWORKID     101    //the same on all nodes that talk to each other
 #define MSG_INTERVAL  100
 

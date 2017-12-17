@@ -18,11 +18,6 @@
 #define SHELL_WA_SIZE   THD_WORKING_AREA_SIZE(2048)
 #define USB_PA12_DISCONNECT 1
 
-#define GATEWAY_ID    1
-#define NODE_ID       1    // node ID if this isn't what the sending node expects then ACKs won't work!
-#define NETWORKID     101    //the same on all nodes that talk to each other
-#define MSG_INTERVAL  100
-
 // Uncomment only one of the following three to match radio frequency
 //#define FREQUENCY     RF69_433MHZ    
 #define FREQUENCY     RF69_868MHZ

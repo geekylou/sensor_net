@@ -19,8 +19,16 @@
 
 #define MSGBUFSIZE 128
 
+struct Nodes
+{
+    int UUID[4];
+    char flags;
+};
+
 thread_reference_t trp = NULL;
 char msgBuf[MSGBUFSIZE];
+
+void handle_dht22_ident();
 
 /* Can be measured using dd if=/dev/xxxx of=/dev/null bs=512 count=10000.*/
 static void cmd_date(BaseSequentialStream *chp, int argc, char *argv[]) {
@@ -139,15 +147,17 @@ static THD_FUNCTION(Thread1, arg) {
   (void)arg;
   int i=0;
   chRegSetThreadName("rf_receive");
-  DHT dht = DHT(GPIOA, 8,DHT22);
+  DHT dht = DHT(GPIOA, 3,DHT22);
   
   extChannelEnable(&EXTD1, 0);
   //chprintf((BaseSequentialStream *)&SD2,"blinker\r\n");
   bool sleep = false;
+  int round=0;
   while (true) 
   {
 	uint8_t theNodeID;
 	uint8_t retVal;
+	int buf_len;
 	
 	if(irq.Get()) 
 	{
@@ -163,8 +173,7 @@ static THD_FUNCTION(Thread1, arg) {
 	if(radio.receiveDone()) 
 	{
 		int index;
-		//chprintf((BaseSequentialStream *)&SD2,"3\r\n");
-		chprintf((BaseSequentialStream *)&SD2,"%d:Received from TNODE: %d %d ",i++,radio.SENDERID,radio.TARGETID);
+		chprintf((BaseSequentialStream *)&SDU1,"%d:Received from TNODE: %d %d ",i++,radio.SENDERID,radio.TARGETID);
 		//pc.printf((char*)radio.DATA);
 		for (index=0; index<radio.DATALEN; index++)
 		{
@@ -175,9 +184,15 @@ static THD_FUNCTION(Thread1, arg) {
 		if (radio.ACKRequested())
 		{
 			theNodeID = radio.SENDERID;
-			radio.sendACK((void *)&radio.RSSI,sizeof(radio.RSSI));
-			chprintf((BaseSequentialStream *)&SD2," - ACK sent. Receive RSSI: %d\r\n",radio.RSSI);
-		} else chprintf((BaseSequentialStream *)&SD2,"Receive RSSI: %d\r\n",radio.RSSI);
+            
+            /* TODO: add auto numbering of nodes. */
+            msgBuf[0] = radio.RSSI;
+            msgBuf[1] = 0x88;
+            msgBuf[2] = 9;
+            
+			radio.sendACK((void *)msgBuf,4);
+			chprintf((BaseSequentialStream *)&SDU1," - ACK sent. Receive RSSI: %d\r\n",radio.RSSI);
+		} else chprintf((BaseSequentialStream *)&SDU1,"Receive RSSI: %d\r\n",radio.RSSI);
 		palSetPad(LED1_PORT, LED1_PAD);
 	}
 	retVal = FastBus1.Read((uint8_t *)msgBuf,sizeof(msgBuf),0);
@@ -189,7 +204,7 @@ static THD_FUNCTION(Thread1, arg) {
 		{
 			if(radio.sendWithRetry((uint8_t)msgBuf[3], &msgBuf[2],retVal,true))
 			{
-				chprintf((BaseSequentialStream *)&SD2,"ACK received\r\n");
+				chprintf((BaseSequentialStream *)&SD2,"ACK received %d\r\n",radio.DATALEN);
 			}
 			else chprintf((BaseSequentialStream *)&SD2,"no Ack!\r\n");
 		}
@@ -198,7 +213,6 @@ static THD_FUNCTION(Thread1, arg) {
 	if (dht.readData() >= 0)
 	{
 		int arr[2];
-		int buf_len;
 		chprintf((BaseSequentialStream *)&SD2,"readData\r\n");
 		arr[0] = dht.ReadTemperature();
 		arr[1] = dht.ReadHumidity();
@@ -213,6 +227,31 @@ static THD_FUNCTION(Thread1, arg) {
 #endif
 		FastBus1.Write((uint8_t *)msgBuf,buf_len,1);
 	}
+	
+	if (buf_len = uuid_node_number_request(msgBuf))
+	{
+		if(radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,buf_len,1000))
+		{
+            if (radio.DATALEN > 3 && radio.DATA[1] == 0x88)
+            {
+                radio.setAddress(radio.DATA[2]);
+                setSourceAddress(radio.DATA[2]);
+            }
+			chprintf((BaseSequentialStream *)&SD2,"ACK received\r\n");
+		}
+		else chprintf((BaseSequentialStream *)&SD2,"no Ack!\r\n");
+	}
+    else
+    {
+        chprintf((BaseSequentialStream *)&SDU1,"Round %d\r\n",round);
+        if (round > 6)
+        {
+            handle_dht22_ident();
+            round = 0;
+        }
+        else round++;
+    }
+	
 	chprintf((BaseSequentialStream *)&SD2,"go back to sleep.\r\n");
 	if(sleep)
 	{
@@ -220,7 +259,7 @@ static THD_FUNCTION(Thread1, arg) {
 		msg_t msg = -1;
 		chSysLock();
 		
-		for (timecount = 0; (timecount < 10 && msg == -1); timecount++)
+		for (timecount = 0; (timecount < 5 && msg == -1); timecount++)
 		{
 			msg = chThdSuspendTimeoutS(&trp,S2ST(1));
 		}
@@ -228,6 +267,17 @@ static THD_FUNCTION(Thread1, arg) {
 		chSysUnlock();
 	}
   }
+}
+
+void handle_dht22_ident()
+{
+    int len;
+    len = create_payload_description(msgBuf,GATEWAY_ID,PAYLOAD_DHT11_TEMP+1,PAYLOAD_TYPE_ASCII,(char *)"Temp");
+
+    radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,len,1);
+
+    len = create_payload_description(msgBuf,GATEWAY_ID,PAYLOAD_DHT11_HUMIDITY+1,PAYLOAD_TYPE_ASCII,(char *)"Humidity");
+    radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,len,1);
 }
 
 static const ShellCommand commands[] = {
