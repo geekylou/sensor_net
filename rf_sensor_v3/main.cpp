@@ -11,15 +11,16 @@
 #include "chprintf.h"
 #include "chbsem.h"
 #include "RFM69.h"
+#include "dht.h"
+#include "framing.h"
 #include "board_specific.h"
 
 #define SHELL_WA_SIZE   THD_WORKING_AREA_SIZE(2048)
 
 #define MSGBUFSIZE 128
 
-int *serial_no = (int *)0x0801FC00;
-
-static thread_reference_t trp = NULL;
+thread_reference_t trp = NULL;
+char msgBuf[MSGBUFSIZE];
 
 /* Can be measured using dd if=/dev/xxxx of=/dev/null bs=512 count=10000.*/
 static void cmd_date(BaseSequentialStream *chp, int argc, char *argv[]) {
@@ -43,17 +44,18 @@ static void cmd_date(BaseSequentialStream *chp, int argc, char *argv[]) {
   }
   chprintf(chp,"\nDate: %2d:%02d:%02d\r\n",tim.tm_hour,tim.tm_min,tim.tm_sec); 
   chprintf(chp,"UUID: %x %x %x %x\r\n",serial_no[0],serial_no[1],serial_no[1],serial_no[3]);
-  chprintf((BaseSequentialStream *)&SDU1,"%d\r\n",irq.Get());
+  chprintf(chp,"%d\r\n",irq.Get());
   chprintf(chp, "\r\n\nback to shell! %d\r\n",radio.readTemperature(0));
 }
 
+char msg[64] = "hello world";
+  
 /* Can be measured using dd if=/dev/xxxx of=/dev/null bs=512 count=10000.*/
 static void cmd_write(BaseSequentialStream *chp, int argc, char *argv[]) 
 { 
   chprintf(chp, "\r\n\nAttempting to write to fast bus\r\n");
-  char msg[64] = "hello world";
   
-  FastBus1.Write((uint8_t *)msg, strlen(msg), 10000);
+  FastBus1.Write((uint8_t *)msg, strlen(msg), S2ST(10));
   
   chprintf(chp, "\r\n\nback to shell!\r\n");
 }
@@ -68,7 +70,7 @@ static void cmd_read(BaseSequentialStream *chp, int argc, char *argv[])
   
   size_t retval;
   
-  retval = FastBus1.Read((uint8_t *)msg, sizeof(msg), 10000);
+  retval = FastBus1.Read((uint8_t *)msg, sizeof(msg), S2ST(10));
   
   chprintf(chp, "\r\n\nback to shell! (%d) %s\r\n",retval,msg);
 }
@@ -97,7 +99,6 @@ static void cmd_i2c(BaseSequentialStream *chp, int argc, char *argv[])
   }
 }
 
-/* Can be measured using dd if=/dev/xxxx of=/dev/null bs=512 count=10000.*/
 static void cmd_spi(BaseSequentialStream *chp, int argc, char *argv[]) 
 { 
   msg_t status = MSG_OK;
@@ -123,51 +124,30 @@ void extcb1(EXTDriver *extp, expchannel_t channel)
 
   (void)extp;
   (void)channel;
-  palClearPad(GPIOC, 13);
+  palClearPad(LED1_PORT, LED1_PAD);
   chSysLockFromISR();
-  chThdResumeI(&trp, (msg_t)0x1337);  /* Resuming the thread with message.*/
+  chThdResumeI(&trp, (msg_t)0x1000);  /* Resuming the thread with message.*/
   chSysUnlockFromISR();
 }
 
 /*
- * This is a periodic thread that does absolutely nothing except flashing
- * a LED.
+ * This is woken up by RFM69 IRQs and transmissions from fastbas to handle RX/TX for the RFM69.
  */
-static THD_WORKING_AREA(waInterruptThread, 1024);
-static THD_FUNCTION(InterruptThread, arg) {
-
-	(void)arg;
-	chRegSetThreadName("fastbus_rx");
-	while(1)
-	{
-	}
-}
-
-/*
- * This is a periodic thread that does absolutely nothing except flashing
- * a LED.
- */
-static THD_WORKING_AREA(waThread1, 4096);
+static THD_WORKING_AREA(waThread1, 2048);
 static THD_FUNCTION(Thread1, arg) {
 
   (void)arg;
-  int x=0;
   int i=0;
   chRegSetThreadName("rf_receive");
+  DHT dht = DHT(GPIOA, 8,DHT22);
+  
   extChannelEnable(&EXTD1, 0);
   //chprintf((BaseSequentialStream *)&SD2,"blinker\r\n");
   bool sleep = false;
   while (true) 
   {
 	uint8_t theNodeID;
-	char msgBuf[MSGBUFSIZE];
-	/*
-	sprintf((char*)msgBuf,"M %d\r\n",x++);
-	if(radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,strlen(msgBuf),true))
-	{
-		chprintf((BaseSequentialStream *)&SDU1,"ACK received\r\n");
-	}
-	else chprintf((BaseSequentialStream *)&SDU1,"no Ack!\r\n");*/
+	uint8_t retVal;
 	
 	if(irq.Get()) 
 	{
@@ -179,8 +159,7 @@ static THD_FUNCTION(Thread1, arg) {
 	{
 		sleep = true;
 	}
-	//chprintf((BaseSequentialStream *)&SD2,"1\r\n");
-	//palSetPad(GPIOC, 13);       /* Orange.  */
+
 	if(radio.receiveDone()) 
 	{
 		int index;
@@ -199,16 +178,53 @@ static THD_FUNCTION(Thread1, arg) {
 			radio.sendACK((void *)&radio.RSSI,sizeof(radio.RSSI));
 			chprintf((BaseSequentialStream *)&SD2," - ACK sent. Receive RSSI: %d\r\n",radio.RSSI);
 		} else chprintf((BaseSequentialStream *)&SD2,"Receive RSSI: %d\r\n",radio.RSSI);
-		palSetPad(GPIOC, 13);
+		palSetPad(LED1_PORT, LED1_PAD);
 	}
-	//chprintf((BaseSequentialStream *)&SD2,"2\r\n");
+	retVal = FastBus1.Read((uint8_t *)msgBuf,sizeof(msgBuf),0);
 	
+	if(retVal != 0)
+	{
+		chprintf((BaseSequentialStream *)&SD2,"Read(%d) %x %s\r\n",retVal,((uint16_t *)msgBuf)[0],&msgBuf[2]);
+		if ( *((uint16_t *)msgBuf) == 0x1000)
+		{
+			if(radio.sendWithRetry((uint8_t)msgBuf[3], &msgBuf[2],retVal,true))
+			{
+				chprintf((BaseSequentialStream *)&SD2,"ACK received\r\n");
+			}
+			else chprintf((BaseSequentialStream *)&SD2,"no Ack!\r\n");
+		}
+	}
+	
+	if (dht.readData() >= 0)
+	{
+		int arr[2];
+		int buf_len;
+		chprintf((BaseSequentialStream *)&SD2,"readData\r\n");
+		arr[0] = dht.ReadTemperature();
+		arr[1] = dht.ReadHumidity();
+		buf_len = create_payload_int_array(msgBuf,GATEWAY_ID,PAYLOAD_DHT11_TEMP, 2, arr);
+
+#ifdef GATEWAY_ID		
+		if(radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,buf_len,true))
+		{
+			chprintf((BaseSequentialStream *)&SD2,"ACK received\r\n");
+		}
+		else chprintf((BaseSequentialStream *)&SD2,"no Ack!\r\n");
+#endif
+		FastBus1.Write((uint8_t *)msgBuf,buf_len,1);
+	}
+	chprintf((BaseSequentialStream *)&SD2,"go back to sleep.\r\n");
 	if(sleep)
 	{
-		//palClearPad(GPIOC, 13);     /* Orange.  */
+		int timecount;
+		msg_t msg = -1;
 		chSysLock();
-		chThdSuspendTimeoutS(&trp,10);
-		//chprintf((BaseSequentialStream *)&SD2,"%x,",);
+		
+		for (timecount = 0; (timecount < 10 && msg == -1); timecount++)
+		{
+			msg = chThdSuspendTimeoutS(&trp,S2ST(1));
+		}
+		chprintf((BaseSequentialStream *)&SD2,"Wakeup %x\r\n",msg);
 		chSysUnlock();
 	}
   }
@@ -245,8 +261,12 @@ int main(void) {
   chSysInit();
 
   board_init();
-  
-  //setSourceAddress(NODE_ID);
+  /*
+   * Shell manager initialization.
+   */
+  shellInit();
+ #if 1 
+  setSourceAddress(NODE_ID);
   if(radio.initialize(FREQUENCY, NODE_ID, NETWORKID))
   {
 	radio.encrypt(0);
@@ -264,12 +284,9 @@ int main(void) {
   }
   else
   {
-	  //chprintf((BaseSequentialStream *)&SD2,"couldn't init radio\r\n");
+	  chprintf((BaseSequentialStream *)&SD2,"couldn't init radio\r\n");
   }
-  /*
-   * Shell manager initialization.
-   */
-  shellInit();
+  #endif
 
   /*
    * Normal main() thread activity, in this demo it does nothing except

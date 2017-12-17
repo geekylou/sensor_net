@@ -31,32 +31,34 @@
 
 #define MSGBUFSIZE 128
 
+int *serial_no = (int *)0x08004000;
+
 /*
  * Low speed SPI configuration (281.250kHz, CPHA=0, CPOL=0, MSb first).
  */
 static const SPIConfig ls_spicfg = {
   NULL,
-  GPIOA,
+  GPIOC,
   4,
   SPI_CR1_BR_2 | SPI_CR1_BR_1,
   0
 };
 
-IRQWrapper irq = IRQWrapper(GPIOB, 0, 0); /* GPIOB0 ext channel 0 */
+IRQWrapper irq = IRQWrapper(GPIOB, 9, 9); /* GPIOB0 ext channel 0 */
 RFM69 radio = RFM69(&SPID1, &ls_spicfg, &irq, true);
 
 static const EXTConfig extcfg = {
   {
-    {EXT_CH_MODE_RISING_EDGE | EXT_CH_MODE_AUTOSTART | EXT_MODE_GPIOB, extcb1}, /* PORTB0 */
-    {EXT_CH_MODE_DISABLED, NULL},
-    {EXT_CH_MODE_DISABLED, NULL},
-    {EXT_CH_MODE_DISABLED, NULL},
-    {EXT_CH_MODE_DISABLED, NULL},
-    {EXT_CH_MODE_DISABLED, NULL},
-    {EXT_CH_MODE_DISABLED, NULL},
-    {EXT_CH_MODE_DISABLED, NULL},
-    {EXT_CH_MODE_DISABLED, NULL},
-    {EXT_CH_MODE_DISABLED, NULL},
+    {EXT_CH_MODE_DISABLED, NULL}, /* PORTB0 */
+    {EXT_CH_MODE_DISABLED, NULL}, // 1
+    {EXT_CH_MODE_DISABLED, NULL}, // 2
+    {EXT_CH_MODE_DISABLED, NULL}, // 3
+    {EXT_CH_MODE_DISABLED, NULL}, // 4
+    {EXT_CH_MODE_DISABLED, NULL}, // 5
+    {EXT_CH_MODE_DISABLED, NULL}, // 6
+    {EXT_CH_MODE_DISABLED, NULL}, // 7
+    {EXT_CH_MODE_DISABLED, NULL}, // 8
+    {EXT_CH_MODE_RISING_EDGE | EXT_CH_MODE_AUTOSTART | EXT_MODE_GPIOB, extcb1}, // 9
     {EXT_CH_MODE_DISABLED, NULL},
     {EXT_CH_MODE_DISABLED, NULL},
     {EXT_CH_MODE_DISABLED, NULL},
@@ -81,11 +83,11 @@ void board_init()
 	/*
 	* SPI1 I/O pins setup.
 	*/
-	palSetPadMode(GPIOA, 5, PAL_MODE_ALTERNATE(5));     /* SCK. */
-	palSetPadMode(GPIOA, 6, PAL_MODE_ALTERNATE(5));     /* MISO.*/
-	palSetPadMode(GPIOA, 7, PAL_MODE_ALTERNATE(5));     /* MOSI.*/
-	palSetPadMode(GPIOA, 4, PAL_MODE_OUTPUT_PUSHPULL); /* NSS */
-	palSetPadMode(GPIOB, 0, PAL_MODE_INPUT_PULLDOWN); // IRQ
+	palSetPadMode(GPIOB, 5, PAL_MODE_ALTERNATE(5));     /* SCK. */
+	palSetPadMode(GPIOB, 6, PAL_MODE_ALTERNATE(5));     /* MISO.*/
+	palSetPadMode(GPIOB, 7, PAL_MODE_ALTERNATE(5));     /* MOSI.*/
+	palSetPadMode(GPIOC, 4, PAL_MODE_OUTPUT_PUSHPULL); /* NSS */
+	palSetPadMode(GPIOB, 9, PAL_MODE_INPUT_PULLDOWN); // IRQ
 	palClearPad(GPIOA, 4);
 
 	i2cStart(&I2CD2, &i2cfg1);

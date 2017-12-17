@@ -25,3 +25,5 @@ extern IRQWrapper irq;
 
 void board_init();
 void extcb1(EXTDriver *extp, expchannel_t channel);
+
+extern int *serial_no;

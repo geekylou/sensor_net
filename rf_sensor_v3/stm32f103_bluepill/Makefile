@@ -131,7 +131,9 @@ CPPSRC = ../main.cpp \
          ../fast_bus.cpp \
          ../mppl3115a2.cpp \
 		 ../RFM69.cpp \
+		 ../dht.cpp \
 		 ../syscalls_cpp.cpp \
+		 ../framing.cpp \
 		 board_specific.cpp
 		 
 # C sources to be compiled in ARM mode regardless of the global setting.
@@ -174,7 +176,7 @@ INCDIR = $(CHIBIOS)/os/license \
 # Compiler settings
 #
 
-MCU  = cortex-m1
+MCU  = cortex-m3
 
 #TRGT = arm-elf-
 TRGT = arm-none-eabi-

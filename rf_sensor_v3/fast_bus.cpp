@@ -6,17 +6,23 @@
 #include <string.h>
 #include "hal.h"
 
-USBFastBus::USBFastBus(USBDriver *usbp, usbep_t bulk_in, usbep_t bulk_out)
+USBFastBus::USBFastBus()
 {
-    this->usbp = usbp;
+	this->usbp = NULL;
+	enabled = false;
+}
+
+void USBFastBus::Init(USBDriver *usbp, usbep_t bulk_in, usbep_t bulk_out)
+{   
+	this->usbp = usbp;
     this->bulk_in  = bulk_in;
     this->bulk_out = bulk_out;
-    
-    ibqObjectInit(&ibqueue, false, ib,
-                    SERIAL_USB_BUFFERS_SIZE, SERIAL_USB_BUFFERS_NUMBER,
+	
+    ibqObjectInit(&(this->obqueue), false, (this->ib),
+                    FAST_BUS_BUFFERS_SIZE, FAST_BUS_BUFFERS_NUMBER,
                     ibnotify, this);
-    obqObjectInit(&obqueue, false, ob,
-                    SERIAL_USB_BUFFERS_SIZE, SERIAL_USB_BUFFERS_NUMBER,
+    obqObjectInit(&(this->obqueue), false, this->ob,
+                    FAST_BUS_BUFFERS_SIZE, FAST_BUS_BUFFERS_NUMBER,
                     obnotify, this);
 }
 
@@ -160,14 +166,21 @@ size_t USBFastBus::ReadBufferTimeout(input_buffers_queue_t *ibqp, uint8_t *bp,
 
 void USBFastBus::transmitted()
 {
-    size_t n;
-
+    size_t n = 0;
+	uint8_t *buf;
+	
     osalSysLockFromISR();
     
-    obqReleaseEmptyBufferI(&obqueue);
+	if (!enabled)
+	{
+		osalSysUnlockFromISR();
+		return;
+	}
+	
+    obqReleaseEmptyBufferI(&(this->obqueue));
     
     /* Checking if there is a buffer ready for transmission.*/
-    uint8_t *buf = obqGetFullBufferI(&obqueue, &n);
+    buf = obqGetFullBufferI(&(this->obqueue), &n);
 
     if (buf != NULL) 
     {
@@ -182,7 +195,6 @@ void USBFastBus::transmitted()
 void USBFastBus::received()
 {
     osalSysLockFromISR();
-    palSetPad(GPIOA, 7);
     /* Posting the filled buffer in the queue.*/
     ibqPostFullBufferI(&ibqueue, usbGetReceiveTransactionSizeX(usbp,this->bulk_out));
     
@@ -194,11 +206,11 @@ void USBFastBus::received()
 
 bool USBFastBus::start_receive() 
 {
-  uint8_t *buf;
-
+  uint8_t *buf = NULL;
+  
   /* If the USB driver is not in the appropriate state then transactions
      must not be started.*/
-  if (usbGetDriverStateI(usbp) != USB_ACTIVE)
+  if (!enabled || usbp == NULL || usbGetDriverStateI(usbp) != USB_ACTIVE)
   {
     return true;
   }
@@ -235,7 +247,7 @@ void USBFastBus::obnotify(io_buffers_queue_t *bqp)
   
   /* If the USB driver is not in the appropriate state then transactions
      must not be started.*/
-  if (usbGetDriverStateI(inst->usbp) != USB_ACTIVE) 
+  if (!inst->enabled || inst->usbp == NULL || usbGetDriverStateI(inst->usbp) != USB_ACTIVE) 
     return;
   
   /* Checking if there is already a transaction ongoing on the endpoint.*/
@@ -247,7 +259,7 @@ void USBFastBus::obnotify(io_buffers_queue_t *bqp)
     if (buf != NULL) 
 	{
       /* Buffer found, starting a new transaction.*/
-      usbStartTransmitI(inst->usbp, inst->bulk_in, buf, n);
+      usbStartTransmitI((USBDriver*)(inst->usbp), inst->bulk_in, buf, n);
     }
   }
 }

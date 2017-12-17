@@ -24,7 +24,11 @@ extern "C"
     extern SerialUSBDriver SDU1;
 }
 
+extern thread_reference_t trp; /* Thread reference for waking up the RFM69 TX/RX thread. */
 extern USBFastBus FastBus1;
+
+#define USBD1_FASTBUS_SEND_EP           3
+#define USBD1_FASTBUS_RECEIVE_EP        3
 
 #endif  /* USBCFG_H */
 

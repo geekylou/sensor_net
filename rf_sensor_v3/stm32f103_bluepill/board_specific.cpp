@@ -13,6 +13,8 @@
 #include "RFM69.h"
 #include "board_specific.h"
 
+#include "dht.h"
+
 #define SHELL_WA_SIZE   THD_WORKING_AREA_SIZE(2048)
 #define USB_PA12_DISCONNECT 1
 
@@ -30,6 +32,8 @@
 #define ENCRYPT_KEY    "EncryptKey123456"  // use same 16byte encryption key for all devices on net
 
 #define MSGBUFSIZE 128
+
+int *serial_no = (int *)0x0801FC00; // Store the serial no. UUID of the board in 0x801fc00 this is the last flast block of the device.
 
 /*
  * Low speed SPI configuration (281.250kHz, CPHA=0, CPOL=0, MSb first).
@@ -95,6 +99,8 @@ void board_init()
 	sduObjectInit(&SDU1);
 	sduStart(&SDU1, &serusbcfg);
 	extStart(&EXTD1, &extcfg);
+	
+	FastBus1.Init(&USBD1, USBD1_FASTBUS_RECEIVE_EP, USBD1_FASTBUS_SEND_EP);
 	/*
 	* Activates the USB driver and then the USB bus pull-up on D+.
 	* Note, a delay is inserted in order to not have to disconnect the cable
@@ -109,7 +115,7 @@ void board_init()
 #endif
 	usbStart(serusbcfg.usbp, &usbcfg);
 	usbConnectBus(serusbcfg.usbp);
-
+	
 	/*
 	* Activates the serial driver 2 at 115200 baud.
 	* PA2(TX) and PA3(RX) are routed to USART2.
@@ -117,6 +123,7 @@ void board_init()
 	SerialConfig conf;
 	conf.speed = 115200;
 	sdStart(&SD2, &conf);
+	
 	palSetPadMode(GPIOA, 2, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
 	palSetPadMode(GPIOA, 3, PAL_MODE_STM32_ALTERNATE_PUSHPULL);
 	palSetPadMode(GPIOC, 13, PAL_MODE_OUTPUT_PUSHPULL);

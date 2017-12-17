@@ -25,12 +25,11 @@
 #define USBD1_DATA_AVAILABLE_EP         1
 #define USBD1_INTERRUPT_REQUEST_EP      2
 
-#define USBD1_FASTBUS_SEND_EP           3
-#define USBD1_FASTBUS_RECEIVE_EP        3
+
 /* Virtual serial port over USB.*/
 
 SerialUSBDriver SDU1;
-USBFastBus FastBus1(&USBD1, USBD1_FASTBUS_RECEIVE_EP, USBD1_FASTBUS_SEND_EP);
+USBFastBus FastBus1;
 
 /*
  * USB Device Descriptor.
@@ -319,6 +318,10 @@ static const USBEndpointConfig ep2config = {
 static void ep4out_handler(USBDriver *usbp, usbep_t ep)
 {
     FastBus1.received();
+
+	chSysLockFromISR();
+	chThdResumeI(&trp, (msg_t)0x1005);  /* Resume the TX/RX thread for the radio.*/
+	chSysUnlockFromISR();
 }
 
 static void ep4in_handler(USBDriver *usbp, usbep_t ep)
@@ -373,8 +376,9 @@ static void usb_event(USBDriver *usbp, usbevent_t event) {
     usbInitEndpointI(usbp, USBD1_FASTBUS_RECEIVE_EP, &ep4config);
     /* Resetting the state of the CDC subsystem.*/
     sduConfigureHookI(&SDU1);
+    FastBus1.enabled = true;
     FastBus1.start_receive();
-    
+	
     chSysUnlockFromISR();
     return;
   case USB_EVENT_RESET:
