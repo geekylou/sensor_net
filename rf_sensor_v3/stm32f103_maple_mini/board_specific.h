@@ -1,6 +1,6 @@
 #include "RFM69.h"
 
-#define USB_PA12_DISCONNECT 1
+//#define USB_PA12_DISCONNECT 1
 
 //#define GATEWAY_DEVICE
 
@@ -19,8 +19,11 @@
 
 #define SENSOR_I2C I2CD1
 
-#define LED1_PORT GPIOC
-#define LED1_PAD  13
+#define DHT_PORT GPIOA
+#define DHT_PAD  3
+
+#define LED1_PORT GPIOB
+#define LED1_PAD  1
 
 extern RFM69 radio;
 extern IRQWrapper irq;

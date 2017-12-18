@@ -19,12 +19,6 @@
 
 #define MSGBUFSIZE 128
 
-struct Nodes
-{
-    int UUID[4];
-    char flags;
-};
-
 thread_reference_t trp = NULL;
 char msgBuf[MSGBUFSIZE];
 
@@ -146,9 +140,12 @@ static THD_FUNCTION(Thread1, arg) {
 
   (void)arg;
   int i=0;
+
   chRegSetThreadName("rf_receive");
-  DHT dht = DHT(GPIOA, 3,DHT22);
   
+#ifdef DHT_PORT
+  DHT dht = DHT(DHT_PORT, DHT_PAD,DHT22);
+#endif  
   extChannelEnable(&EXTD1, 0);
   //chprintf((BaseSequentialStream *)&SD2,"blinker\r\n");
   bool sleep = false;
@@ -158,7 +155,7 @@ static THD_FUNCTION(Thread1, arg) {
 	uint8_t theNodeID;
 	uint8_t retVal;
 	int buf_len;
-	
+    
 	if(irq.Get()) 
 	{
 		//chprintf((BaseSequentialStream *)&SD2,"4\r\n");
@@ -183,14 +180,23 @@ static THD_FUNCTION(Thread1, arg) {
 		FastBus1.Write((uint8_t *)radio.DATA,radio.DATALEN,1);
 		if (radio.ACKRequested())
 		{
+            buf_len = 1;
 			theNodeID = radio.SENDERID;
             
             /* TODO: add auto numbering of nodes. */
             msgBuf[0] = radio.RSSI;
-            msgBuf[1] = 0x88;
-            msgBuf[2] = 9;
-            
-			radio.sendACK((void *)msgBuf,4);
+#ifdef GATEWAY_DEVICE
+            if (radio.DATA[0] == 0xf0)
+            {
+                msgBuf[1] = 0x88;
+                msgBuf[2] = 9;//assign_node((int *)&radio.DATA[4]);
+
+                if (msgBuf[2] > 0)
+                    buf_len = 4;
+              
+            }
+#endif 
+            radio.sendACK((void *)msgBuf,buf_len);
 			chprintf((BaseSequentialStream *)&SDU1," - ACK sent. Receive RSSI: %d\r\n",radio.RSSI);
 		} else chprintf((BaseSequentialStream *)&SDU1,"Receive RSSI: %d\r\n",radio.RSSI);
 		palSetPad(LED1_PORT, LED1_PAD);
@@ -200,7 +206,7 @@ static THD_FUNCTION(Thread1, arg) {
 	if(retVal != 0)
 	{
 		chprintf((BaseSequentialStream *)&SD2,"Read(%d) %x %s\r\n",retVal,((uint16_t *)msgBuf)[0],&msgBuf[2]);
-		if ( *((uint16_t *)msgBuf) == 0x1000)
+		if (*((uint16_t *)msgBuf) == 0x1000)
 		{
 			if(radio.sendWithRetry((uint8_t)msgBuf[3], &msgBuf[2],retVal,true))
 			{
@@ -209,7 +215,7 @@ static THD_FUNCTION(Thread1, arg) {
 			else chprintf((BaseSequentialStream *)&SD2,"no Ack!\r\n");
 		}
 	}
-	
+#ifdef DHT_PORT	
 	if (dht.readData() >= 0)
 	{
 		int arr[2];
@@ -227,10 +233,11 @@ static THD_FUNCTION(Thread1, arg) {
 #endif
 		FastBus1.Write((uint8_t *)msgBuf,buf_len,1);
 	}
+#endif
 	
 	if (buf_len = uuid_node_number_request(msgBuf))
 	{
-		if(radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,buf_len,1000))
+		if(radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,buf_len,true))
 		{
             if (radio.DATALEN > 3 && radio.DATA[1] == 0x88)
             {
@@ -241,30 +248,31 @@ static THD_FUNCTION(Thread1, arg) {
 		}
 		else chprintf((BaseSequentialStream *)&SD2,"no Ack!\r\n");
 	}
+#ifdef DHT_PORT
     else
     {
         chprintf((BaseSequentialStream *)&SDU1,"Round %d\r\n",round);
         if (round > 6)
         {
+
             handle_dht22_ident();
             round = 0;
         }
         else round++;
     }
-	
+#endif
 	chprintf((BaseSequentialStream *)&SD2,"go back to sleep.\r\n");
 	if(sleep)
 	{
 		int timecount;
 		msg_t msg = -1;
-		chSysLock();
-		
+		chSysLock();		
 		for (timecount = 0; (timecount < 5 && msg == -1); timecount++)
 		{
 			msg = chThdSuspendTimeoutS(&trp,S2ST(1));
-		}
-		chprintf((BaseSequentialStream *)&SD2,"Wakeup %x\r\n",msg);
+		}		
 		chSysUnlock();
+        chprintf((BaseSequentialStream *)&SDU1,"Wakeup %x\r\n",msg);
 	}
   }
 }
@@ -315,7 +323,7 @@ int main(void) {
    * Shell manager initialization.
    */
   shellInit();
- #if 1 
+  //clear_nodes();
   setSourceAddress(NODE_ID);
   if(radio.initialize(FREQUENCY, NODE_ID, NETWORKID))
   {
@@ -336,7 +344,7 @@ int main(void) {
   {
 	  chprintf((BaseSequentialStream *)&SD2,"couldn't init radio\r\n");
   }
-  #endif
+
 
   /*
    * Normal main() thread activity, in this demo it does nothing except
@@ -344,16 +352,16 @@ int main(void) {
    */
   while (true) {
       //test_execute((BaseSequentialStream *)&SD2);
-#if 1
+
       if (SDU1.config->usbp->state == USB_ACTIVE) {
-#endif
+
       thread_t *shelltp = chThdCreateFromHeap(NULL, SHELL_WA_SIZE,
                                               "shell", NORMALPRIO + 1,
                                               shellThread, (void *)&shell_cfg1);
       chThdWait(shelltp);               /* Waiting termination.             */
-#if 1
+
       }
-#endif
+
     chThdSleepMilliseconds(500);
   }
 }
