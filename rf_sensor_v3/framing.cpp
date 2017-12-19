@@ -5,8 +5,6 @@
 static uint8_t sequence_no=0; 
 static uint8_t src_adddr= 0xf0;
 
-#define NODES_LENGTH 64
-
 Node nodes[NODES_LENGTH];
 
 void setSourceAddress(uint8_t source_addr)
@@ -34,10 +32,10 @@ uint8_t assign_node(int *uuid)
         if (nodes[count].flags == 0)
         {
             nodes[count].flags = NODE_FLAG_ASSIGNED;
-            uuid[0] = nodes[count].UUID[0];
-            uuid[1] = nodes[count].UUID[1];
-            uuid[2] = nodes[count].UUID[2];
-            uuid[3] = nodes[count].UUID[3];
+            nodes[count].UUID[0] = uuid[0];
+            nodes[count].UUID[1] = uuid[1];
+            nodes[count].UUID[2] = uuid[2];
+            nodes[count].UUID[3] = uuid[3];
             return count+10;
         }
     }

@@ -18,7 +18,7 @@ void USBFastBus::Init(USBDriver *usbp, usbep_t bulk_in, usbep_t bulk_out)
     this->bulk_in  = bulk_in;
     this->bulk_out = bulk_out;
 	
-    ibqObjectInit(&(this->obqueue), false, (this->ib),
+    ibqObjectInit(&(this->ibqueue), false, (this->ib),
                     FAST_BUS_BUFFERS_SIZE, FAST_BUS_BUFFERS_NUMBER,
                     ibnotify, this);
     obqObjectInit(&(this->obqueue), false, this->ob,
@@ -196,7 +196,7 @@ void USBFastBus::received()
 {
     osalSysLockFromISR();
     /* Posting the filled buffer in the queue.*/
-    ibqPostFullBufferI(&ibqueue, usbGetReceiveTransactionSizeX(usbp,this->bulk_out));
+    ibqPostFullBufferI(&(this->ibqueue), usbGetReceiveTransactionSizeX(usbp,this->bulk_out));
     
     (void) start_receive();
     

@@ -33,3 +33,7 @@ struct Node
     int UUID[4];
     char flags;
 };
+
+#define NODES_LENGTH 64
+
+extern Node nodes[];

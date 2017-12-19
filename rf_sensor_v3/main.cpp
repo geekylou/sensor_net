@@ -189,7 +189,7 @@ static THD_FUNCTION(Thread1, arg) {
             if (radio.DATA[0] == 0xf0)
             {
                 msgBuf[1] = 0x88;
-                msgBuf[2] = 9;//assign_node((int *)&radio.DATA[4]);
+                msgBuf[2] = assign_node((int *)(&radio.DATA[4]));
 
                 if (msgBuf[2] > 0)
                     buf_len = 4;
@@ -201,20 +201,7 @@ static THD_FUNCTION(Thread1, arg) {
 		} else chprintf((BaseSequentialStream *)&SDU1,"Receive RSSI: %d\r\n",radio.RSSI);
 		palSetPad(LED1_PORT, LED1_PAD);
 	}
-	retVal = FastBus1.Read((uint8_t *)msgBuf,sizeof(msgBuf),0);
-	
-	if(retVal != 0)
-	{
-		chprintf((BaseSequentialStream *)&SD2,"Read(%d) %x %s\r\n",retVal,((uint16_t *)msgBuf)[0],&msgBuf[2]);
-		if (*((uint16_t *)msgBuf) == 0x1000)
-		{
-			if(radio.sendWithRetry((uint8_t)msgBuf[3], &msgBuf[2],retVal,true))
-			{
-				chprintf((BaseSequentialStream *)&SD2,"ACK received %d\r\n",radio.DATALEN);
-			}
-			else chprintf((BaseSequentialStream *)&SD2,"no Ack!\r\n");
-		}
-	}
+
 #ifdef DHT_PORT	
 	if (dht.readData() >= 0)
 	{
@@ -260,7 +247,35 @@ static THD_FUNCTION(Thread1, arg) {
         }
         else round++;
     }
-#endif
+#endif    
+    retVal = FastBus1.Read((uint8_t *)msgBuf,sizeof(msgBuf),0);
+	     
+	if(retVal != 0)
+	{
+		chprintf((BaseSequentialStream *)&SD2,"Read(%d) %x %s\r\n",retVal,((uint16_t *)msgBuf)[0],&msgBuf[2]);
+		if (*((uint16_t *)msgBuf) == 0x1000)
+		{
+			if(radio.sendWithRetry((uint8_t)msgBuf[3], &msgBuf[2],retVal,true))
+			{
+				chprintf((BaseSequentialStream *)&SD2,"ACK received %d\r\n",radio.DATALEN);
+			}
+			else chprintf((BaseSequentialStream *)&SD2,"no Ack!\r\n");
+		}
+        else if (*((uint16_t *)msgBuf) == 0x2000)
+		{
+            uint8_t count = msgBuf[2] - 10;
+            
+            if (count < NODES_LENGTH)
+            {
+                msgBuf[0] = msgBuf[2];
+                msgBuf[1] = 0x1;
+                msgBuf[2] = 0x88;
+                memcpy(&msgBuf[3], nodes[count].UUID, 16);
+                retVal = FastBus1.Write((uint8_t *)msgBuf,19,0);
+            }
+		}
+	}
+
 	chprintf((BaseSequentialStream *)&SD2,"go back to sleep.\r\n");
 	if(sleep)
 	{
@@ -323,7 +338,7 @@ int main(void) {
    * Shell manager initialization.
    */
   shellInit();
-  //clear_nodes();
+  clear_nodes();
   setSourceAddress(NODE_ID);
   if(radio.initialize(FREQUENCY, NODE_ID, NETWORKID))
   {
