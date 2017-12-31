@@ -5,6 +5,7 @@ import os
 import struct
 import threading
 import uuid
+import traceback
 
 import usb.core
 import usb.util
@@ -42,9 +43,12 @@ class Serial_Bus(object):
                     long_name = str(self.hosts[packet[0]])+"-"+str(packet[2] & ~1)
                     #print("long_name",self.long_names,long_name)
                     if (long_name in self.long_names) and (packet[0] in self.hosts):
-                        values_dict = { "station_id": self.hosts[packet[0]], "value" : packet[4], "sequence_no": packet[3] }
+                        values_dict = { "station_id": packet[0], "value" : packet[4], "sequence_no": packet[3] }
                         values_long = [self.long_names[long_name],"*",json.dumps(values_dict),str(packet[4])]
                         values_list.append(values_long)
+                    elif (packet[2] < 128):
+                        print("Request descriptor",packet[0])
+                        self.req_descriptors(packet[0])
         return values_list
         
     def _decode_packet(self,recv_data):
@@ -56,8 +60,16 @@ class Serial_Bus(object):
         print("line:",args)
         args[3] = args[3] * 2
         if args[2] == 0x88:
-            #print("data:",bytes(recv_data[4:22]))
+            print("uuid:",bytes(recv_data[4:22]))
             uuid_str = str(uuid.UUID(bytes=bytes(recv_data[3:21])))
+            
+            self.hosts[args[0]] = uuid_str
+            
+            data = ["UUID/"+uuid_str]
+            return [tuple(list(args[0:3]) + data)]
+        elif args[2] == 0x86:
+            print("uuid:",bytes(recv_data[4:22]))
+            uuid_str = str(uuid.UUID(bytes=bytes(recv_data[4:22])))
             
             self.hosts[args[0]] = uuid_str
             
@@ -86,7 +98,11 @@ class Serial_Bus(object):
             pos = 8
             for item in range((len(recv_data) - 8) // 4):
                lst.append((args[0],args[1],args[2]+2+item*2,(args[3]+item+1),struct.unpack("<i",recv_data[pos:pos+4])[0]))
+               
+               print(pos,recv_data[pos:pos+4])
+               
                pos = pos + 4
+            print(lst)
             return lst
 
     def _read_device(self):
@@ -130,6 +146,11 @@ class TFT_FastBus(Serial_Bus):
         self.fast_endpoint.write(struct.pack("<H",0x1000) + str)
         self.write_lock.release()
         
+    def req_descriptors(self,count):
+        self.write_lock.acquire()
+        self.fast_endpoint.write(struct.pack("<HBB",0x2001,count,0x2)) # 0x2 Request descriptors flag.
+        self.write_lock.release()
+        
     def req_addr(self,count):
         self.write_lock.acquire()
         self.fast_endpoint.write(struct.pack("<HB",0x2000,count))
@@ -151,8 +172,8 @@ class TFT_FastBus(Serial_Bus):
             #return struct.unpack("<HH",str)
             #return str_out
         except usb.core.USBError as e:
-            if e.backend_error_code != -116:
-                print(e.backend_error_code)
+            if e.backend_error_code != -116 and e.backend_error_code != -7:
+                print("e.backend_error_code",e.backend_error_code)
                 raise e
             #print(e)
             return ()
@@ -165,16 +186,18 @@ if __name__ == "__main__":
     sock_send.connect("tcp://192.168.1.116:10901")
     try:
       #data_bus.write("wibble".encode('utf-8'))
-      data_bus.req_addr(10);
       while True:
-        values_lst = data_bus.read()
-        for values in values_lst:
-            print(values)
+        try:
+          values_lst = data_bus.read()
+          for values in values_lst:
+            print("values:",values)
             if values:
                 sock_send.send_multipart([str(i).encode('UTF-8') for i in values])
-        
+        except: 
+          traceback.print_exc(file=sys.stderr)
     except KeyError:
-        tempreture_log_file.close()
+        pass
+        #tempreture_log_file.close()
         #tft.fast_endpoint.write(struct.pack("<H",0x4000) + str(x))
         #print x
         #print time.gmtime().tm_min,
