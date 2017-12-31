@@ -88,10 +88,10 @@ bool mppl3115a2_setup(BaseSequentialStream *chp)
 {
 
   if(IIC_Read(WHO_AM_I) == 196) 
-    chprintf(chp,"MPL3115A2 online!");
+    chprintf(chp,"MPL3115A2: online!");
   else
   {
-    chprintf(chp,"No response - check connections");
+    chprintf(chp,"MPL3115A2: No response - check connections");
     return(false);
   }
 

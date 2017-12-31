@@ -18,6 +18,8 @@
 
 #define SENSOR_I2C I2CD1
 
+#define MPPL311A2
+
 #define LED1_PORT GPIOC
 #define LED1_PAD  13
 

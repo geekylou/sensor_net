@@ -14,20 +14,6 @@
 #include "board_specific.h"
 
 #define SHELL_WA_SIZE   THD_WORKING_AREA_SIZE(2048)
-#define USB_PA12_DISCONNECT 1
-
-#define GATEWAY_ID    1
-#define NODE_ID       1    // node ID if this isn't what the sending node expects then ACKs won't work!
-#define NETWORKID     101    //the same on all nodes that talk to each other
-#define MSG_INTERVAL  100
-
-// Uncomment only one of the following three to match radio frequency
-//#define FREQUENCY     RF69_433MHZ    
-#define FREQUENCY     RF69_868MHZ
-//#define FREQUENCY     RF69_915MHZ
-
-#define IS_RFM69HW   //NOTE: uncomment this ONLY for RFM69HW or RFM69HCW
-#define ENCRYPT_KEY    "EncryptKey123456"  // use same 16byte encryption key for all devices on net
 
 #define MSGBUFSIZE 128
 
@@ -44,7 +30,7 @@ static const SPIConfig ls_spicfg = {
   0
 };
 
-IRQWrapper irq = IRQWrapper(GPIOB, 9, 9); /* GPIOB0 ext channel 0 */
+IRQWrapper irq = IRQWrapper(GPIOB, 9, 9); /* GPIOB0 ext channel 9 */
 RFM69 radio = RFM69(&SPID1, &ls_spicfg, &irq, true);
 
 static const EXTConfig extcfg = {
@@ -97,6 +83,8 @@ void board_init()
 	sduObjectInit(&SDU1);
 	sduStart(&SDU1, &serusbcfg);
 	extStart(&EXTD1, &extcfg);
+    
+    FastBus1.Init(&USBD1, USBD1_FASTBUS_RECEIVE_EP, USBD1_FASTBUS_SEND_EP);
 	/*
 	* Activates the USB driver and then the USB bus pull-up on D+.
 	* Note, a delay is inserted in order to not have to disconnect the cable
@@ -119,6 +107,7 @@ void board_init()
 	SerialConfig conf;
 	conf.speed = 115200;
 	sdStart(&SD2, &conf);
+    
 	palSetPadMode(GPIOA, 2, PAL_MODE_ALTERNATE(7));
 	palSetPadMode(GPIOA, 3, PAL_MODE_ALTERNATE(7));
 	palSetPadMode(LED1_PORT, LED1_PAD, PAL_MODE_OUTPUT_PUSHPULL);

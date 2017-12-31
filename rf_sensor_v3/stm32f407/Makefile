@@ -127,6 +127,7 @@ CPPSRC = ../main.cpp \
          ../mppl3115a2.cpp \
 		 ../RFM69.cpp \
 		 ../syscalls_cpp.cpp \
+         ../framing.cpp \
 		 board_specific.cpp
 		 
 # C sources to be compiled in ARM mode regardless of the global setting.

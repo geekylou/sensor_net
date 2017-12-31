@@ -16,15 +16,6 @@
 #include "dht.h"
 
 #define SHELL_WA_SIZE   THD_WORKING_AREA_SIZE(2048)
-#define USB_PA12_DISCONNECT 1
-
-// Uncomment only one of the following three to match radio frequency
-//#define FREQUENCY     RF69_433MHZ    
-#define FREQUENCY     RF69_868MHZ
-//#define FREQUENCY     RF69_915MHZ
-
-#define IS_RFM69HW   //NOTE: uncomment this ONLY for RFM69HW or RFM69HCW
-#define ENCRYPT_KEY    "EncryptKey123456"  // use same 16byte encryption key for all devices on net
 
 #define MSGBUFSIZE 128
 

@@ -17,6 +17,22 @@ void clear_nodes()
     memset(nodes,sizeof(nodes),0);
 }
 
+uint8_t check_node(int *uuid)
+{
+    int count = 0;
+    for(;count < NODES_LENGTH; count++)
+    {
+        if (uuid[0] == nodes[count].UUID[0] && 
+            uuid[1] == nodes[count].UUID[1] && 
+            uuid[2] == nodes[count].UUID[2] && 
+            uuid[3] == nodes[count].UUID[3])
+        {
+            return count+10; // Start id's from 10
+        }
+    }
+    return 0;
+}
+
 uint8_t assign_node(int *uuid)
 {
     int count = 0;
@@ -42,10 +58,31 @@ uint8_t assign_node(int *uuid)
     return 0;
 }
 
-/* Request a node id on the network. */
-int uuid_node_number_request(char *message_payload)
+uint8_t get_flags(uint8_t node_id,bool clear)
 {
-	if (src_adddr == 0xf0)
+    uint8_t flags = 0;
+    node_id = node_id - 10;
+
+    if (node_id < NODES_LENGTH)
+    {
+        flags =  nodes[node_id].flags;
+        if (clear) nodes[node_id].flags &= NODE_FLAG_ASSIGNED;
+    }
+    return flags;
+}
+
+void set_flag(uint8_t node_id,uint8_t flags)
+{
+   node_id = node_id - 10;
+   
+   if (node_id < NODES_LENGTH)
+     nodes[node_id].flags |= (flags & ~NODE_FLAG_ASSIGNED); // It is not allowable to set the assigned flag in the host.
+}
+
+/* Request a node id on the network. */
+int uuid_node_number_request(uint8_t flags,char *message_payload)
+{
+	if ((src_adddr == 0xf0) || (flags & NODE_FLAG_ASSIGNED) == 0)
 	{
 		return create_payload_int_array(message_payload, GATEWAY_ID, PAYLOAD_UUID, 4, serial_no);
 	}
