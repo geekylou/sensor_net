@@ -18,6 +18,8 @@
 
 #define PAYLOAD_LENGTH          16
 
+#define AUTO_NODE_OFFSET        10
+
 int create_payload_int(char *message_payload,uint8_t dest,uint8_t type, int payload);
 int create_payload_int_array(char *message_payload,uint8_t dest,uint8_t type, int length, int *payload);
 int create_payload_description(char *message_payload,uint8_t dest,uint8_t type, uint8_t description_type,char *payload);

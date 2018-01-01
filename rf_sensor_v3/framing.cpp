@@ -27,7 +27,7 @@ uint8_t check_node(int *uuid)
             uuid[2] == nodes[count].UUID[2] && 
             uuid[3] == nodes[count].UUID[3])
         {
-            return count+10; // Start id's from 10
+            return count+AUTO_NODE_OFFSET; // Start id's from 10
         }
     }
     return 0;
@@ -43,7 +43,7 @@ uint8_t assign_node(int *uuid)
             uuid[2] == nodes[count].UUID[2] && 
             uuid[3] == nodes[count].UUID[3])
         {
-            return count+10; // Start id's from 10
+            return count+AUTO_NODE_OFFSET; // Start id's from 10
         }
         if (nodes[count].flags == 0)
         {
@@ -52,7 +52,7 @@ uint8_t assign_node(int *uuid)
             nodes[count].UUID[1] = uuid[1];
             nodes[count].UUID[2] = uuid[2];
             nodes[count].UUID[3] = uuid[3];
-            return count+10;
+            return count+AUTO_NODE_OFFSET;
         }
     }
     return 0;
@@ -61,7 +61,7 @@ uint8_t assign_node(int *uuid)
 uint8_t get_flags(uint8_t node_id,bool clear)
 {
     uint8_t flags = 0;
-    node_id = node_id - 10;
+    node_id = node_id - AUTO_NODE_OFFSET;
 
     if (node_id < NODES_LENGTH)
     {
@@ -73,7 +73,7 @@ uint8_t get_flags(uint8_t node_id,bool clear)
 
 void set_flag(uint8_t node_id,uint8_t flags)
 {
-   node_id = node_id - 10;
+   node_id = node_id - AUTO_NODE_OFFSET;
    
    if (node_id < NODES_LENGTH)
      nodes[node_id].flags |= (flags & ~NODE_FLAG_ASSIGNED); // It is not allowable to set the assigned flag in the host.

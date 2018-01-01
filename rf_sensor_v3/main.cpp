@@ -58,7 +58,17 @@ char msg[64] = "hello world";
 /* Can be measured using dd if=/dev/xxxx of=/dev/null bs=512 count=10000.*/
 static void cmd_stations(BaseSequentialStream *chp, int argc, char *argv[]) 
 { 
-
+    int count = 0;
+    chprintf(chp,"UUID: %x %x %x %x\r\n",serial_no[0],serial_no[1],serial_no[2],serial_no[3]);
+    
+    for(;count < NODES_LENGTH; count++)
+    {
+        if (nodes[count].flags & NODE_FLAG_ASSIGNED)
+        {
+            chprintf(chp,"UUID[%d]: %x %x %x %x\r\n",count+AUTO_NODE_OFFSET,nodes[count].UUID[0],nodes[count].UUID[1],
+                                                           nodes[count].UUID[2],nodes[count].UUID[3]);
+        }
+    }
 }
 
 /* Can be measured using dd if=/dev/xxxx of=/dev/null bs=512 count=10000.*/
@@ -190,16 +200,26 @@ static THD_FUNCTION(Thread1, arg) {
             {
                 msgBuf[1] = 0x88; // Assign id.
                 msgBuf[2] = assign_node((int *)(&radio.DATA[4]));
-
+                                
                 if (msgBuf[2] > 0)
-                    buf_len = 4;
-              
+                {
+                    buf_len = 7;
+                    *((int *)(&msgBuf[3])) = nodes[msgBuf[2]].UUID[0];
+                }
             }
             else if (!(node_flags & NODE_FLAG_ASSIGNED) ||  (node_flags & ~NODE_FLAG_ASSIGNED))
             {
                msgBuf[1] = 0x8a; // Send flags.
                msgBuf[2] = get_flags(theNodeID,true);
                buf_len = 3;
+            }
+            else // If we have nothing to send then send a the first 4-bytes of the UUID to verify it isn't shared. With any other node
+            {
+                msgBuf[1] = 0x86; // Assign id.
+                *((int *)(&msgBuf[2])) = = nodes[theNodeID].UUID[0];
+
+                buf_len = 6;
+              
             }
 #endif 
             radio.sendACK((void *)msgBuf,buf_len);
@@ -259,7 +279,7 @@ static THD_FUNCTION(Thread1, arg) {
 #endif
     {
         chprintf((BaseSequentialStream *)&SD2,"Round %d\r\n",round);
-        if ((round > 6) || (flags & NODE_FLAG_REQUEST_PAYLOAD_DESCRIPTORS))
+        if (flags & NODE_FLAG_REQUEST_PAYLOAD_DESCRIPTORS)
         {
 #ifdef DHT_PORT
             handle_dht22_ident(&flags);
@@ -291,11 +311,14 @@ static THD_FUNCTION(Thread1, arg) {
             
             if (count < NODES_LENGTH)
             {
-                msgBuf[0] = msgBuf[2];
-                msgBuf[1] = 0x1;
-                msgBuf[2] = 0x88;
-                memcpy(&msgBuf[3], nodes[count].UUID, 16);
-                retVal = FastBus1.Write((uint8_t *)msgBuf,19,0);
+                if (nodes[count].flags & NODE_FLAG_ASSIGNED)
+                {
+                    msgBuf[0] = msgBuf[2];
+                    msgBuf[1] = 0x1;
+                    msgBuf[2] = 0x88;
+                    memcpy(&msgBuf[3], nodes[count].UUID, 16);
+                    retVal = FastBus1.Write((uint8_t *)msgBuf,19,0);
+                }
             }
 		}
         else if (*((uint16_t *)msgBuf) == 0x2001) // Request sensor IDs for node no.
@@ -336,9 +359,10 @@ void send_frame(uint8_t *flags,char *message_payload, uint8_t length)
         
         if (radio.DATA[1] == 0x8A) // 0x8a Flags were returned in ACK.
         {
-            *flags |= radio.DATA[2];
-            
-            if ((radio.DATA[2] & NODE_FLAG_ASSIGNED) == 0) {*flags = *flags & ~NODE_FLAG_ASSIGNED;}
+            /* Flags can only clear NODE_FLAG_ASSIGNED to signify that the nodes ID is no longer assigned.
+               eg. the gateway has been restarted and doesn't know about the node.
+			   All other flags can only be set by the frame and must be reset when they are acted on.*/
+            *flags = radio.DATA[2] | (*flags & ~NODE_FLAG_ASSIGNED);
         }
     }
     else chprintf((BaseSequentialStream *)&SD2,"3:no Ack!\r\n");
