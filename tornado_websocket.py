@@ -7,6 +7,7 @@ ioloop.install()
 from zmq.eventloop.zmqstream import ZMQStream
 
 import tornado.ioloop
+import tornado.gen
 import tornado.web
 import tornado.websocket
 import threading
@@ -48,6 +49,50 @@ class ZMQPubSub(object):
         self.stream.close()
         print self.socket.close()
 
+class MultiplexPubSub(object):
+    def __init__(self):
+        self.callbacks = set()
+
+    def add_callback(self,callback):
+        self.callbacks.add(callback)
+        
+    def remove_callback(self,callback):
+        self.callbacks.remove(callback)
+        
+    @tornado.gen.coroutine
+    def on_recv(self,data):
+        data[2] = json.loads(data[2])
+        if data[2]==1:
+            data[2]= {"value":data[3]}
+        if not "timestamp" in data[2]:
+            data[2]['timestamp'] = time.time()
+#        print("callback:",data,self.callbacks)
+        for callback in self.callbacks:
+            callback(data)
+        
+    def connect(self):
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.SUB)
+        self.socket.connect('tcp://house-nas:10900')
+        
+        self.send_socket = self.context.socket(zmq.PUB)
+        self.send_socket.connect('tcp://house-nas:10901')
+        
+        print("socket connect:",self.socket,self.on_recv)
+        self.stream = ZMQStream(self.socket)
+        self.stream.on_recv(self.on_recv)
+
+    def send(self,data):
+        self.send_socket.send_multipart([str(i) for i in json.loads(data)])
+
+    def subscribe(self, channel_id):
+        print("subscribe:",channel_id)
+        self.socket.setsockopt(zmq.SUBSCRIBE, channel_id)
+	
+    def close(self):
+        self.stream.close()
+        print self.socket.close()
+        
 class RelayEventSource(tornado.web.RequestHandler):
     @tornado.web.asynchronous
     def get(self):
@@ -85,7 +130,7 @@ class RelayEventSource(tornado.web.RequestHandler):
         print(self.get_cookie("sessionid"))
 
     def on_data(self, data):
-        data[2] = json.loads(data[2])
+#        data[2] = json.loads(data[2])
         self.write(u"data: " + json.dumps(data)+ "\n\n")   
         self.flush()
     
@@ -93,7 +138,7 @@ class RelayEventSource(tornado.web.RequestHandler):
         print "on_close"
         if (self.session_ipc):
             self.session_ipc.close()
-        if (self.pubsub):                                                                                                                                                                     
+        if (self.pubsub):
             self.pubsub.close()
         self.finish()
         
@@ -127,27 +172,30 @@ class RelayWebSocket(tornado.websocket.WebSocketHandler):
     
     
     def _init_pubsub(self):
-        self.pubsub = ZMQPubSub(self.on_data) 
-        print "connect!"
-        self.pubsub.connect()
+        #self.pubsub = ZMQPubSub(self.on_data) 
+        #print "connect!"
+        #self.pubsub.connect()
         
-        if self.authenticated:
-            self.pubsub.subscribe("")
-        else:
-            self.pubsub.subscribe("Temp/28-031600af4bff")
+        #if self.authenticated:
+        #    self.pubsub.subscribe("")
+        #else:
+        #    self.pubsub.subscribe("Temp/28-031600af4bff")
         
-        self.context = zmq.Context()
-        self.send_socket = self.context.socket(zmq.PUB)
-        self.send_socket.connect('tcp://house-nas:10901')
+        #self.context = zmq.Context()
+        #self.send_socket = self.context.socket(zmq.PUB)
+        #self.send_socket.connect('tcp://house-nas:10901')
 
+        pubsub.add_callback(self.on_data)
         print 'ws opened'
   
     def on_message(self, message):
         if self.authenticated:
             print("Message received:",message)
-            self.send_socket.send_multipart([str(i) for i in json.loads(message)])
-
+            #self.send_socket.send_multipart([str(i) for i in json.loads(message)])
+            pubsub.send(message)
+            
     def on_close(self):
+        pubsub.remove_callback(self.on_data)
         if (self.pubsub):
             self.pubsub.close()
         if (self.session_ipc):
@@ -155,12 +203,52 @@ class RelayWebSocket(tornado.websocket.WebSocketHandler):
         print("WebSocket closed")
         
     def on_data(self, data):
-        #print data
+        print data
+        if not self.authenticated:
+            if not is_valid(data):
+                return
         self.write_message(json.dumps(data))
 
+def is_valid(data):
+    valid = False
+    valid = valid | data[0].startswith("Temp/28-031600af4bff")
+    valid = valid | data[0].startswith("mqtt/octoprint/temperature/")
+    valid = valid | data[0].startswith("mqtt/octoprint/progress/")
+    return valid
+    
+def filter(values):
+    for item in values:
+        if is_valid(item):
+            yield item
+    
 class LastMessages(tornado.web.RequestHandler):
+    @tornado.web.asynchronous
     def get(self):
-        self.write(json.dumps(last_msg))
+        if (self.request.remote_ip == '127.0.0.1'):
+            self.authenticated = True
+            return(self._process())
+        else:
+             self.session_ipc = session_ipc.SessionIPC(context,None)
+             self.session_ipc.retrieve_session(self.on_session_data,self.get_cookie("sessionid"))
+        
+    def on_session_data(self,data):
+        self.authenticated = False
+        print(data)
+        if (data[0] == 'OK'):
+            args = json.loads(data[1])
+            
+            if "authenticated" in args and args["authenticated"] == True:
+                self.authenticated = True
+        self._process()
+    
+    def _process(self):
+        if not self.authenticated:
+            vals = list(filter(last_msg.values()))
+        else:
+            vals = last_msg.values()
+
+        self.write(json.dumps(vals))
+        self.finish()
         
 context = zmq.Context()
 last_msg = {}
@@ -176,12 +264,17 @@ application = tornado.web.Application([
 ], cookie_secret="<secret-key>") # Cookie secret is not used here.  This should also be loaded in from a config file if needed.
 
 if __name__ == "__main__":
-    try:
-        pubsub = ZMQPubSub(PubSubCallback)
+    def main():
+        global pubsub
+        pubsub = MultiplexPubSub()
         pubsub.connect()
         pubsub.subscribe("")
+        pubsub.add_callback(PubSubCallback)
+        
+    try:
         print("Start event loop")
         application.listen(8889)
+        zmq.eventloop.IOLoop.current().run_sync(main)
         zmq.eventloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         router.close()
