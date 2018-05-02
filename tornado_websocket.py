@@ -67,8 +67,14 @@ class MultiplexPubSub(object):
         if not "timestamp" in data[2]:
             data[2]['timestamp'] = time.time()
 #        print("callback:",data,self.callbacks)
+         
         for callback in self.callbacks:
-            callback(data)
+            try:
+                callback(data)
+            except WebSocketClosedError:
+                print("Closed by WebSocketClosedError!")
+                self.callbacks.remove(callback)
+                data.on_close()
         
     def connect(self):
         self.context = zmq.Context()
@@ -114,17 +120,21 @@ class RelayEventSource(tornado.web.RequestHandler):
             
             if "authenticated" in args and args["authenticated"] == True:
                 self.authenticated = True
+        if (self.session_ipc):
+            self.session_ipc.close()
+
         self.init_pubsub()
 
     def init_pubsub(self):
-        self.pubsub = ZMQPubSub(self.on_data)    
-        self.pubsub.connect()
-
-        if self.authenticated:
-            self.pubsub.subscribe("")
-        else:
-            self.pubsub.subscribe("Temp/28-031600af4bff")
+        #self.pubsub = ZMQPubSub(self.on_data)    
+        #self.pubsub.connect()
+        #
+        #if self.authenticated:
+        #    self.pubsub.subscribe("")
+        #else:
+        #    self.pubsub.subscribe("Temp/28-031600af4bff")
             
+        pubsub.add_callback(self.on_data)            
         self.set_header("Content-Type", 'text/event-stream')
         self.set_header("Cache-Control", 'no-cache')
         print(self.get_cookie("sessionid"))
@@ -134,12 +144,13 @@ class RelayEventSource(tornado.web.RequestHandler):
         self.write(u"data: " + json.dumps(data)+ "\n\n")   
         self.flush()
     
-    def on_connection_close(self):
+    def close(self):
+        pubsub.remove_callback(self.on_data)
         print "on_close"
         if (self.session_ipc):
             self.session_ipc.close()
-        if (self.pubsub):
-            self.pubsub.close()
+        #if (self.pubsub):
+        #    self.pubsub.close()
         self.finish()
         
 class RelayWebSocket(tornado.websocket.WebSocketHandler):
@@ -168,6 +179,9 @@ class RelayWebSocket(tornado.websocket.WebSocketHandler):
             
             if "authenticated" in args and args["authenticated"] == True:
                 self.authenticated = True
+        if (self.session_ipc):
+            self.session_ipc.close()
+
         self._init_pubsub()
     
     
@@ -196,14 +210,14 @@ class RelayWebSocket(tornado.websocket.WebSocketHandler):
             
     def on_close(self):
         pubsub.remove_callback(self.on_data)
-        if (self.pubsub):
-            self.pubsub.close()
+        #if (self.pubsub):
+        #    self.pubsub.close()
         if (self.session_ipc):
             self.session_ipc.close()
         print("WebSocket closed")
         
     def on_data(self, data):
-        print data
+        #print data
         if not self.authenticated:
             if not is_valid(data):
                 return
@@ -220,6 +234,21 @@ def filter(values):
     for item in values:
         if is_valid(item):
             yield item
+    
+def load_last_messages(filename):
+    lines = open("last_readings","r").readlines()
+    
+    last_readings_dict = {}
+    last_readings = json.loads(lines[0])
+    
+    for item in last_readings:
+        last_msg[item[0]] = item
+
+def save_last_messages():
+    last_msg_file = open("last_readings","w")
+    vals = last_msg.values()
+    last_msg_file.write(json.dumps(vals))
+    last_msg_file.close()
     
 class LastMessages(tornado.web.RequestHandler):
     @tornado.web.asynchronous
@@ -239,6 +268,8 @@ class LastMessages(tornado.web.RequestHandler):
             
             if "authenticated" in args and args["authenticated"] == True:
                 self.authenticated = True
+        if (self.session_ipc):
+            self.session_ipc.close()
         self._process()
     
     def _process(self):
@@ -248,6 +279,12 @@ class LastMessages(tornado.web.RequestHandler):
             vals = last_msg.values()
 
         self.write(json.dumps(vals))
+        self.finish()
+
+    def close(self):
+        print "on_close"
+        if (self.session_ipc):
+            self.session_ipc.close()
         self.finish()
         
 context = zmq.Context()
@@ -265,6 +302,7 @@ application = tornado.web.Application([
 
 if __name__ == "__main__":
     def main():
+        load_last_messages("last_msgs.json")
         global pubsub
         pubsub = MultiplexPubSub()
         pubsub.connect()
@@ -275,6 +313,8 @@ if __name__ == "__main__":
         print("Start event loop")
         application.listen(8889)
         zmq.eventloop.IOLoop.current().run_sync(main)
+        last_msg_callback = ioloop.PeriodicCallback(save_last_messages,60000*60)
+        last_msg_callback.start()
         zmq.eventloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         router.close()
