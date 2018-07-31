@@ -4,6 +4,8 @@
 
 //#define GATEWAY_DEVICE
 
+#define RFM69_ENABLED
+
 #define GATEWAY_ID    1
 #define NODE_ID       0xf0    // node ID if this isn't what the sending node expects then ACKs won't work!
 #define NETWORKID     101    //the same on all nodes that talk to each other
@@ -20,6 +22,9 @@
 #define SENSOR_I2C I2CD1
 
 #define MPPL311A2
+
+#define DHT_PORT GPIOA
+#define DHT_PAD  3
 
 #define LED1_PORT GPIOC
 #define LED1_PAD  13

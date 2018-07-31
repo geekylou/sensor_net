@@ -4,7 +4,7 @@
 #
 
 # En/disable usage of maplemini bootloader support
-#USE_MAPLEMINI_BOOTLOADER ?= 1
+USE_MAPLEMINI_BOOTLOADER ?= 1
 
 # Compiler options here.
 ifeq ($(USE_OPT),)

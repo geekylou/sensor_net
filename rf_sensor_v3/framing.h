@@ -25,7 +25,7 @@ int create_payload_int_array(char *message_payload,uint8_t dest,uint8_t type, in
 int create_payload_description(char *message_payload,uint8_t dest,uint8_t type, uint8_t description_type,char *payload);
 void setSourceAddress(uint8_t source_addr);
 int uuid_node_number_request(uint8_t flags,char *message_payload);
-uint8_t assign_node(int *uuid);
+uint8_t assign_node(int *uuid, uint8_t station_id);
 void clear_nodes();
 uint8_t get_flags(uint8_t node_id,bool clear);
 void set_flag(uint8_t node_id,uint8_t flags);

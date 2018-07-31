@@ -165,10 +165,11 @@ static THD_FUNCTION(Thread1, arg) {
 	uint8_t theNodeID;
 	uint8_t retVal;
 	int buf_len;
-    
+  
+#ifdef RFM69_ENABLED
 	if(irq.Get()) 
 	{
-		//chprintf((BaseSequentialStream *)&SD2,"4\r\n");
+		chprintf((BaseSequentialStream *)&SD1,"4\r\n");
 		radio.isr0();
 		sleep = false;
 	}
@@ -180,13 +181,13 @@ static THD_FUNCTION(Thread1, arg) {
 	if(radio.receiveDone()) 
 	{
 		int index;
-		chprintf((BaseSequentialStream *)&SD2,"%d:Received from TNODE: %d %d %d ",i++,radio.SENDERID,radio.TARGETID,radio.RSSI);
+		chprintf((BaseSequentialStream *)&SD1,"%d:Received from TNODE: %d %d %d ",i++,radio.SENDERID,radio.TARGETID,radio.RSSI);
 		//pc.printf((char*)radio.DATA);
 		for (index=0; index<radio.DATALEN; index++)
 		{
-			chprintf((BaseSequentialStream *)&SD2,"%x,",radio.DATA[index]);
+			chprintf((BaseSequentialStream *)&SD1,"%x,",radio.DATA[index]);
 		}
-		chprintf((BaseSequentialStream *)&SD2,"\r\n");
+		chprintf((BaseSequentialStream *)&SD1,"\r\n");
 		FastBus1.Write((uint8_t *)radio.DATA,radio.DATALEN,1);
 		if (radio.ACKRequested())
 		{
@@ -199,7 +200,7 @@ static THD_FUNCTION(Thread1, arg) {
             if (radio.DATA[2] == PAYLOAD_UUID)
             {
                 msgBuf[1] = 0x88; // Assign id.
-                msgBuf[2] = assign_node((int *)(&radio.DATA[4]));
+                msgBuf[2] = assign_node((int *)(&radio.DATA[4]), radio.DATA[0]);
                                 
                 if (msgBuf[2] > 0)
                 {
@@ -216,27 +217,31 @@ static THD_FUNCTION(Thread1, arg) {
             else // If we have nothing to send then send a the first 4-bytes of the UUID to verify it isn't shared. With any other node
             {
                 msgBuf[1] = 0x86; // Assign id.
-                *((int *)(&msgBuf[2])) = = nodes[theNodeID].UUID[0];
+                *((int *)(&msgBuf[2])) = nodes[theNodeID].UUID[0];
 
                 buf_len = 6;
               
             }
 #endif 
             radio.sendACK((void *)msgBuf,buf_len);
-            chprintf((BaseSequentialStream *)&SD2," - ACK sent. Receive RSSI: %d args: %d %d\r\n",radio.RSSI,msgBuf[1],msgBuf[2]);
-		} else chprintf((BaseSequentialStream *)&SD2,"Receive RSSI: %d\r\n",radio.RSSI);
+            chprintf((BaseSequentialStream *)&SD1," - ACK sent. Receive RSSI: %d args: %d %d\r\n",radio.RSSI,msgBuf[1],msgBuf[2]);
+		} else chprintf((BaseSequentialStream *)&SD1,"Receive RSSI: %d\r\n",radio.RSSI);
 		palSetPad(LED1_PORT, LED1_PAD);
 	}
+#endif
 
 #ifdef DHT_PORT	
 	if (dht.readData() >= 0)
 	{
 		int arr[2];
-		chprintf((BaseSequentialStream *)&SD2,"readData\r\n");
+		chprintf((BaseSequentialStream *)&SD1,"readData\r\n");
 		arr[0] = dht.ReadTemperature();
 		arr[1] = dht.ReadHumidity();
 		buf_len = create_payload_int_array(msgBuf,GATEWAY_ID,PAYLOAD_DHT11_TEMP, 2, arr);
 
+		chprintf((BaseSequentialStream *)&SD1,"send frame %d %d\r\n",arr[0],arr[1]);
+        
+        
 		send_frame(&flags,msgBuf,buf_len);
 	}
 #endif
@@ -251,12 +256,13 @@ static THD_FUNCTION(Thread1, arg) {
         buf_len = create_payload_int_array(msgBuf,GATEWAY_ID,PAYLOAD_MPPL_TEMP, 2, arr);
         send_frame(&flags,msgBuf,buf_len);
     }
-    
+
+#ifdef RFM69_ENABLED
 #ifndef GATEWAY_DEVICE
-    chprintf((BaseSequentialStream *)&SD2,"Flags: %d\r\n",flags);
+    chprintf((BaseSequentialStream *)&SD1,"Flags: %d\r\n",flags);
 	if (buf_len = uuid_node_number_request(flags,msgBuf))
 	{
-        chprintf((BaseSequentialStream *)&SD2,"Request ID \r\n");
+        chprintf((BaseSequentialStream *)&SD1,"Request ID \r\n");
 		if(radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,buf_len,true))
 		{
             if (radio.DATALEN >= 2 && radio.DATA[1] == 0x88)
@@ -271,14 +277,15 @@ static THD_FUNCTION(Thread1, arg) {
             
                 if ((radio.DATA[2] & NODE_FLAG_ASSIGNED) == 0) {flags = flags & ~NODE_FLAG_ASSIGNED;}
             }
-			chprintf((BaseSequentialStream *)&SD2,"1:ACK received\r\n");
+			chprintf((BaseSequentialStream *)&SD1,"1:ACK received\r\n");
 		}
-		else chprintf((BaseSequentialStream *)&SD2,"1:no Ack!\r\n");
+		else chprintf((BaseSequentialStream *)&SD1,"1:no Ack!\r\n");
 	}
     else
 #endif
+#endif
     {
-        chprintf((BaseSequentialStream *)&SD2,"Round %d\r\n",round);
+        chprintf((BaseSequentialStream *)&SD1,"Round %d %d\r\n",round, flags);
         if (flags & NODE_FLAG_REQUEST_PAYLOAD_DESCRIPTORS)
         {
 #ifdef DHT_PORT
@@ -296,14 +303,14 @@ static THD_FUNCTION(Thread1, arg) {
 	if(retVal != 0)
 	{
 	    sleep = false;
-		chprintf((BaseSequentialStream *)&SD2,"Read(%d) %x %s\r\n",retVal,((uint16_t *)msgBuf)[0],&msgBuf[2]);
+		chprintf((BaseSequentialStream *)&SD1,"Read(%d) %x %s\r\n",retVal,((uint16_t *)msgBuf)[0],&msgBuf[2]);
 		if (*((uint16_t *)msgBuf) == 0x1000)
 		{
 			if(radio.sendWithRetry((uint8_t)msgBuf[3], &msgBuf[2],retVal,true))
 			{
-				chprintf((BaseSequentialStream *)&SD2,"3:ACK received %d\r\n",radio.DATALEN);
+				chprintf((BaseSequentialStream *)&SD1,"3:ACK received %d\r\n",radio.DATALEN);
 			}
-			else chprintf((BaseSequentialStream *)&SD2,"2:no Ack!\r\n");
+			else chprintf((BaseSequentialStream *)&SD1,"2:no Ack!\r\n");
 		}
         else if (*((uint16_t *)msgBuf) == 0x2000) // Request UUID for node no.
 		{
@@ -321,13 +328,13 @@ static THD_FUNCTION(Thread1, arg) {
                 }
             }
 		}
-        else if (*((uint16_t *)msgBuf) == 0x2001) // Request sensor IDs for node no.
+        else if (*((uint16_t *)msgBuf) == 0x2001) // Set flag on node.
 	    {
             set_flag(msgBuf[2],msgBuf[3]);
 	    }
 	}
 
-	chprintf((BaseSequentialStream *)&SD2,"go back to sleep.\r\n");
+	chprintf((BaseSequentialStream *)&SD1,"go back to sleep. %d\r\n",sleep);
 	if(sleep)
 	{
 		int timecount;
@@ -338,24 +345,25 @@ static THD_FUNCTION(Thread1, arg) {
 			msg = chThdSuspendTimeoutS(&trp,S2ST(1));
 		}		
 		chSysUnlock();
-        chprintf((BaseSequentialStream *)&SD2,"Wakeup %x\r\n",msg);
+        chprintf((BaseSequentialStream *)&SD1,"Wakeup %x\r\n",msg);
 	}
   }
 }
 
 void send_frame(uint8_t *flags,char *message_payload, uint8_t length)
 {
+#ifdef RFM69_ENABLED
 #ifndef GATEWAY_DEVICE
     if(radio.sendWithRetry((uint8_t)GATEWAY_ID, msgBuf,length,true))
     {
-        chprintf((BaseSequentialStream *)&SD2,"3:ACK received %d\r\n",radio.DATALEN);
+        chprintf((BaseSequentialStream *)&SD1,"3:ACK received %d\r\n",radio.DATALEN);
         int index;
 		//pc.printf((char*)radio.DATA);
 		for (index=0; index<radio.DATALEN; index++)
 		{
-			chprintf((BaseSequentialStream *)&SD2,"%x,",radio.DATA[index]);
+			chprintf((BaseSequentialStream *)&SD1,"%x,",radio.DATA[index]);
 		}
-		chprintf((BaseSequentialStream *)&SD2,"\r\n");
+		chprintf((BaseSequentialStream *)&SD1,"\r\n");
         
         if (radio.DATA[1] == 0x8A) // 0x8a Flags were returned in ACK.
         {
@@ -365,7 +373,9 @@ void send_frame(uint8_t *flags,char *message_payload, uint8_t length)
             *flags = radio.DATA[2] | (*flags & ~NODE_FLAG_ASSIGNED);
         }
     }
-    else chprintf((BaseSequentialStream *)&SD2,"3:no Ack!\r\n");
+    else chprintf((BaseSequentialStream *)&SD1,"3:no Ack!\r\n");
+    palSetPad(LED1_PORT, LED1_PAD);
+#endif
 #endif
     FastBus1.Write((uint8_t *)message_payload,length,0);
 }
@@ -421,22 +431,29 @@ int main(void) {
   chSysInit();
 
   board_init();
+  chprintf((BaseSequentialStream *)&SD1,"init start\r\n");
   /*
    * Shell manager initialization.
    */
   shellInit();
   clear_nodes();
   setSourceAddress(NODE_ID);
+
   if(radio.initialize(FREQUENCY, NODE_ID, NETWORKID))
   {
 	radio.encrypt(0);
-	radio.setPowerLevel(0);
+	radio.setPowerLevel(1);
+#ifdef GATEWAY_DEVICE
 	radio.promiscuous(true);
-#ifdef IS_RFM69HW
-	radio.setHighPower(); //uncomment #define ONLY if radio is of type: RFM69HW or RFM69HCW 
+#else
+    radio.promiscuous(false);
 #endif
-
-    mppl3115a2_present = mppl3115a2_setup((BaseSequentialStream *)&SD2);
+#ifdef IS_RFM69HW
+	radio.setHighPower(true); //uncomment #define ONLY if radio is of type: RFM69HW or RFM69HCW 
+#else
+    radio.setHighPower(false);
+#endif
+    mppl3115a2_present = mppl3115a2_setup((BaseSequentialStream *)&SD1);
 
 	/*
 	* Creates the sensor thread.
@@ -446,7 +463,7 @@ int main(void) {
   }
   else
   {
-	  chprintf((BaseSequentialStream *)&SD2,"couldn't init radio\r\n");
+	  chprintf((BaseSequentialStream *)&SD1,"couldn't init radio\r\n");
   }
   
   /*

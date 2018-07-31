@@ -100,7 +100,7 @@ void board_init()
 #ifdef USB_PA12_DISCONNECT
 	palSetPadMode(GPIOA, 12, PAL_MODE_OUTPUT_PUSHPULL);
 	palClearPad(GPIOA, 12);
-	chThdSleepMilliseconds(1500);
+	chThdSleepMilliseconds(2000);
 	palSetPadMode(GPIOA, 12, PAL_MODE_STM32_ALTERNATE_PUSHPULL /*PAL_MODE_ALTERNATE(10)*/);
 #endif
 	usbStart(serusbcfg.usbp, &usbcfg);

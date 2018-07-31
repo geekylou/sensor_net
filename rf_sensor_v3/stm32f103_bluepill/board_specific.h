@@ -2,6 +2,8 @@
 
 #define USB_PA12_DISCONNECT 1
 
+#define RFM69
+
 #define GATEWAY_DEVICE
 
 #define GATEWAY_ID    1

@@ -28,7 +28,7 @@ DHT::~DHT() {
 }
 
 int DHT::readData() {
-	chprintf((BaseSequentialStream *)&SD2,"readData!\r\n");
+	chprintf((BaseSequentialStream *)&SD1,"readData!\r\n");
     //Timer tmr;
     // BUFFER TO RECEIVE
     //uint8_t bits[5];

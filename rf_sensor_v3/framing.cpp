@@ -33,9 +33,24 @@ uint8_t check_node(int *uuid)
     return 0;
 }
 
-uint8_t assign_node(int *uuid)
+uint8_t assign_node(int *uuid, uint8_t station_id)
 {
-    int count = 0;
+    uint8_t count = 0;
+    
+    count = station_id - AUTO_NODE_OFFSET;
+   
+    if (count < NODES_LENGTH && station_id != 0xf0)
+    {
+       if (nodes[count].flags == 0)
+        {
+            nodes[count].flags = NODE_FLAG_ASSIGNED;
+            nodes[count].UUID[0] = uuid[0];
+            nodes[count].UUID[1] = uuid[1];
+            nodes[count].UUID[2] = uuid[2];
+            nodes[count].UUID[3] = uuid[3];
+            return count+AUTO_NODE_OFFSET;
+        }
+    }   
     for(;count < NODES_LENGTH; count++)
     {
         if (uuid[0] == nodes[count].UUID[0] && 

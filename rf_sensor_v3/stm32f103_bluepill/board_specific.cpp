@@ -19,7 +19,11 @@
 
 #define MSGBUFSIZE 128
 
+#ifdef USE_MAPLEMINI_BOOTLOADER
+int *serial_no = (int *)0x8001fd0;
+#else
 int *serial_no = (int *)0x0801FC00; // Store the serial no. UUID of the board in 0x801fc00 this is the last flast block of the device.
+#endif
 
 /*
  * Low speed SPI configuration (281.250kHz, CPHA=0, CPOL=0, MSb first).
