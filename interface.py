@@ -43,7 +43,7 @@ class Serial_Bus(object):
                     long_name = str(self.hosts[packet[0]])+"-"+str(packet[2] & ~1)
                     #print("long_name",self.long_names,long_name)
                     if (long_name in self.long_names) and (packet[0] in self.hosts):
-                        values_dict = { "station_id": packet[0], "value" : packet[4], "sequence_no": packet[3] }
+                        values_dict = { "station_id": packet[0], "value" : float(packet[4])/1000, "sequence_no": packet[3] }
                         values_long = [self.long_names[long_name],"*",json.dumps(values_dict),str(packet[4])]
                         values_list.append(values_long)
                     elif (packet[2] < 128):
@@ -76,7 +76,7 @@ class Serial_Bus(object):
             data = ["UUID/"+uuid_str]
             return [tuple(list(args[0:3]) + data)]
         elif(args[2] & 1 == 1):
-            #print("descriptor type",recv_data[5] >> 4)
+            print("descriptor type",recv_data[5] >> 4,args)
 
             if args[4] & 0xf == 1: # Onewire bus address of sensor.
                 addr=[]
@@ -91,6 +91,10 @@ class Serial_Bus(object):
                         name.append(ch)
                     else:
                         break
+                        
+                if args[0] not in self.hosts:
+                    self.req_addr(args[0])
+                    return[]
                 data = [bytearray(name).decode('UTF-8')+"/"+self.hosts[args[0]]+"/"+str(args[2] & ~0x1),recv_data[3] >> 4]
             return [tuple(list(args[0:3]) + data)]
         else:
@@ -193,6 +197,10 @@ if __name__ == "__main__":
             print("values:",values)
             if values:
                 sock_send.send_multipart([str(i).encode('UTF-8') for i in values])
+        except usb.core.USBError as e:
+            if e.backend_error_code != -116 and e.backend_error_code != -7:
+                print("e.backend_error_code",e.backend_error_code)
+                raise e
         except: 
           traceback.print_exc(file=sys.stderr)
     except KeyError:

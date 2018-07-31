@@ -4,8 +4,8 @@ import db_log
 
 logger = db_log.Logger()
 
-for reading in logger.session_inst.query(db_log.Readings).all():
-    print(reading.sensor_id,reading.value)
+#for reading in logger.session_inst.query(db_log.Readings).all():
+#    print(reading.sensor_id,reading.value)
 
 # Socket to talk to server
 context = zmq.Context()
